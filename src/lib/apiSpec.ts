@@ -1,6 +1,6 @@
-export const API_VERSION = "1.1.0" as const;
+export const API_VERSION = "1.2.0" as const;
 
-export const API_FEATURES = ["Unified Search", "Trending Charts", "Spotify Playlist Clone", "Song Stream Resolver"] as const;
+export const API_FEATURES = ["Unified Search", "Trending Charts", "Spotify Playlist Clone", "Song Stream Resolver", "Spotify Bulk Downloader"] as const;
 
 export const API_ENDPOINTS = [
   {
@@ -36,6 +36,12 @@ export const API_ENDPOINTS = [
     method: "GET",
     params: ["id", "limit?"],
     description: "Fetch a Spotify playlist and its tracks (paged).",
+  },
+  {
+    path: "/api/spotify-download/[id]",
+    method: "GET",
+    params: ["id (Playlist ID)"],
+    description: "Fetch a Spotify playlist with direct download links. Path-based version avoids terminal parse errors.",
   },
   {
     path: "/api/song",

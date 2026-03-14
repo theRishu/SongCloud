@@ -265,3 +265,50 @@ export async function getSpotifyPlaylist(playlistId: string, options?: { maxTrac
         truncated: tracks.length < total,
     };
 }
+
+export async function scrapeSpotifyPlaylist(playlistId: string) {
+    const url = `https://open.spotify.com/embed/playlist/${playlistId}`;
+    const response = await axios.get(url, {
+        timeout: 10_000,
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+        }
+    });
+
+    const html = response.data;
+    const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+    if (!match) return null;
+
+    try {
+        const data = JSON.parse(match[1]);
+        const entity = data.props.pageProps.state.data.entity;
+        
+        const playlistImage = entity.coverArt?.sources?.[0]?.url ?? "";
+
+        const tracks = (entity.trackList || []).map((item: any) => {
+            const trackId = item.uri.split(':').pop();
+            return {
+                id: trackId,
+                title: item.title,
+                subtitle: item.subtitle,
+                image: playlistImage, // Fallback to playlist image since tracks in embed don't have individual images
+                source: 'spotify'
+            };
+        });
+
+        return {
+            id: entity.id,
+            title: entity.title,
+            description: entity.subtitle,
+            image: playlistImage,
+            owner: entity.authors?.[0]?.name ?? "Spotify",
+            total: entity.trackList?.length ?? 0,
+            tracks,
+            truncated: false,
+            scraped: true
+        };
+    } catch (e) {
+        console.error("Scraper failed to parse JSON:", e);
+        return null;
+    }
+}

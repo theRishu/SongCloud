@@ -1,0 +1,384 @@
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    padding-top: 5rem;
+    position: relative;
+}
+
+.toast {
+    position: fixed;
+    top: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #10b981;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 2rem;
+    font-weight: 600;
+    z-index: 1000;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    animation: slideInDown 0.3s ease-out;
+}
+
+@keyframes slideInDown {
+    from { transform: translate(-50%, -20px); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.title {
+    font-size: 2.8rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, #fff 0%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1.1rem;
+}
+
+.searchBox {
+    display: flex;
+    gap: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1rem;
+    border-radius: 1.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(15px);
+    margin-bottom: 3rem;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+}
+
+.inputWrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.icon {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: white;
+    padding: 1rem 0;
+    font-size: 1rem;
+    outline: none;
+}
+
+.clearBtn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.clearBtn:hover {
+    color: white;
+}
+
+.fetchBtn {
+    background: #a78bfa;
+    color: black;
+    border: none;
+    padding: 0 2rem;
+    border-radius: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 160px;
+}
+
+.fetchBtn:hover:not(:disabled) {
+    background: #c4b5fd;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(167, 139, 250, 0.4);
+}
+
+.fetchBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    padding: 1.25rem;
+    border-radius: 1rem;
+    margin-bottom: 2rem;
+    text-align: center;
+    backdrop-filter: blur(5px);
+}
+
+.playlistInfo {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 2.5rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.playlistTitle {
+    font-size: 2.2rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+}
+
+.playlistDesc {
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 1rem;
+    max-width: 600px;
+}
+
+.playlistStats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.95rem;
+}
+
+.playlistCount {
+    color: #a78bfa;
+    font-weight: 700;
+}
+
+.playlistOwner {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.batchActions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.toolBtn {
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.75rem 1.25rem;
+    border-radius: 2rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    transition: all 0.2s;
+}
+
+.toolBtn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.downloadAllBtn {
+    background: white;
+    color: black;
+    border: none;
+    padding: 0.85rem 2rem;
+    border-radius: 2.5rem;
+    font-weight: 800;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+
+.downloadAllBtn:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 15px 30px rgba(255,255,255,0.2);
+}
+
+.downloadAllBtn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.trackList {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.trackItem {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem 1.25rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 1rem;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.trackItem:hover {
+    background: rgba(255, 255, 255, 0.07);
+    transform: translateX(5px);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.trackItemDownloading {
+    background: rgba(167, 139, 250, 0.1) !important;
+    border-color: rgba(167, 139, 250, 0.3) !important;
+}
+
+.trackRank {
+    width: 2rem;
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: 700;
+    text-align: center;
+}
+
+.trackArt {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border-radius: 0.4rem;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.itemPlayBtn {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.trackArt:hover .itemPlayBtn {
+    opacity: 1;
+}
+
+.trackDetails {
+    flex: 1;
+    min-width: 0;
+}
+
+.trackName {
+    font-size: 1.05rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.1rem;
+}
+
+.trackArtists {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.trackDownloadBtn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.trackDownloadBtn:hover:not(:disabled) {
+    background: #a78bfa;
+    color: black;
+    border-color: #a78bfa;
+    transform: scale(1.1);
+}
+
+.emptyState {
+    text-align: center;
+    padding: 6rem 2rem;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.emptyIcon {
+    margin-bottom: 2rem;
+    opacity: 0.15;
+    animation: pulse 3s infinite ease-in-out;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 0.15; }
+    50% { transform: scale(1.1); opacity: 0.25; }
+    100% { transform: scale(1); opacity: 0.15; }
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding-top: 3rem;
+    }
+    .title {
+        font-size: 2rem;
+    }
+    .searchBox {
+        flex-direction: column;
+    }
+    .fetchBtn {
+        width: 100%;
+        padding: 1rem;
+    }
+    .playlistInfo {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2rem;
+    }
+    .batchActions {
+        width: 100%;
+        flex-direction: column;
+    }
+    .downloadAllBtn, .toolBtn {
+        width: 100%;
+        justify-content: center;
+    }
+}

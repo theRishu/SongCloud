@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Heart, Home, Library, ListMusic, PlusCircle, Search, X } from "lucide-react";
+import { Heart, Home, Library, ListMusic, PlusCircle, Search, X, DownloadCloud } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -80,6 +80,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             icon={<Library size={20} />}
             label="Library"
             active={pathname === "/library"}
+            onSelect={closeIfOpen}
+          />
+          <NavItem
+            href="/spotify-download"
+            icon={<DownloadCloud size={20} />}
+            label="Downloader"
+            active={pathname === "/spotify-download"}
             onSelect={closeIfOpen}
           />
         </nav>

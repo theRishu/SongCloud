@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Download, Heart, ListPlus, Menu, Play, PlusCircle, Search as SearchIcon, X } from "lucide-react";
+import { Copy, Download, Heart, ListPlus, Menu, Play, PlusCircle, Search as SearchIcon, X, DownloadCloud } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMusic } from "@/context/MusicContext";
 import styles from "./SearchBar.module.css";
@@ -187,6 +187,13 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
       router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
     }
   }, [pathname, query, urlQuery, router, searchParams]);
+
+  useEffect(() => {
+    if (query.trim().toLowerCase() === "/spotifydownload") {
+      router.push("/spotify-download");
+      setQuery("");
+    }
+  }, [query, router]);
 
   useEffect(() => {
     const fetchTrending = async () => {
@@ -673,6 +680,16 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
               aria-label="Import Spotify playlist"
             >
               <PlusCircle size={22} color="#a78bfa" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push("/spotify-download")}
+              className={`${styles.menuButton} ${styles.cloneButton}`}
+              title="Spotify Downloader"
+              aria-label="Spotify Downloader"
+            >
+              <DownloadCloud size={22} color="#10b981" />
             </button>
           </div>
         </div>
