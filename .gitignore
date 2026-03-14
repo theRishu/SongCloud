@@ -13,7 +13,8 @@
 # testing
 /coverage
 
-deploy.sh
+# scripts
+*.sh
 
 # next.js
 /.next/
