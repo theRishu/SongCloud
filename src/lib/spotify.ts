@@ -266,12 +266,11 @@ export async function getSpotifyPlaylist(playlistId: string, options?: { maxTrac
     };
 }
 
-const trackMetaCache = new MemoryCache<any>({ maxEntries: 1000, ttlMs: 24 * 60 * 60_000 }); // 24 hour cache
+const trackMetaCache = new MemoryCache<any>({ maxEntries: 5000, ttlMs: 48 * 60 * 60_000 }); // 48 hour deep cache
 
 export async function getSpotifyTracks(ids: string[]) {
     if (ids.length === 0) return [];
     
-    // Check cache first
     const results: any[] = [];
     const missingIds: string[] = [];
     
@@ -297,7 +296,7 @@ export async function getSpotifyTracks(ids: string[]) {
         try {
             const url = `https://api.spotify.com/v1/tracks?ids=${chunk.join(',')}`;
             const response = await axios.get(url, {
-                timeout: 5000,
+                timeout: 8000,
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             const tracks = response.data.tracks.filter((t: any) => t !== null).map((track: any) => {
@@ -313,7 +312,7 @@ export async function getSpotifyTracks(ids: string[]) {
             });
             fetchedTracks.push(...tracks);
         } catch (e) {
-            console.warn("Spotify batch metadata failed for a chunk.");
+            console.warn("Spotify batch chunk failed, will rely on individual fallbacks.");
         }
     }
     return [...results, ...fetchedTracks];
@@ -322,7 +321,7 @@ export async function getSpotifyTracks(ids: string[]) {
 export async function scrapeSpotifyPlaylist(playlistId: string) {
     const url = `https://open.spotify.com/embed/playlist/${playlistId}`;
     const response = await axios.get(url, {
-        timeout: 10_000,
+        timeout: 12_000,
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
         }
@@ -340,9 +339,9 @@ export async function scrapeSpotifyPlaylist(playlistId: string) {
         const trackList = entity.trackList || [];
         const trackIds = trackList.map((item: any) => item.uri.split(':').pop());
 
-        // INCREASED LIMIT: Boost first 100 tracks (most common playlist size)
-        // With the new trackMetaCache, subsequent fetches for same tracks are instant
-        const boostedMetadata = await getSpotifyTracks(trackIds.slice(0, 100)).catch(() => []);
+        // NO LIMIT: Fetch metadata for ALL tracks in batches
+        // This ensures a 500 track playlist gets 500 unique images
+        const boostedMetadata = await getSpotifyTracks(trackIds).catch(() => []);
         const metadataMap = new Map(boostedMetadata.map((t: any) => [t.id, t]));
 
         const tracks = await Promise.all(trackList.map(async (item: any, index: number) => {
@@ -351,14 +350,14 @@ export async function scrapeSpotifyPlaylist(playlistId: string) {
             
             let finalImage = boosted?.image || playlistImage;
 
-            // EMERGENCY FALLBACK: Increased to 30 tracks for deeper unique coverage when API fails
-            if (finalImage === playlistImage && index < 30) {
+            // SMART FALLBACK: If API failed and we have no unique image, use search-based discovery
+            // We prioritize the first 50 tracks for deep search, then skip for performance unless requested
+            if (finalImage === playlistImage && index < 50) {
                 try {
                     const { searchJioSaavn } = await import("./jiosaavn");
                     const searchRes = await searchJioSaavn(`${item.title} ${item.subtitle}`);
                     if (searchRes?.[0]?.image) {
                         finalImage = searchRes[0].image;
-                        // Cache this fallback too!
                         trackMetaCache.set(trackId, { 
                             id: trackId, 
                             title: item.title, 
@@ -395,6 +394,7 @@ export async function scrapeSpotifyPlaylist(playlistId: string) {
         return null;
     }
 }
+
 
 
 
