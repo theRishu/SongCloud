@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getSpotifyPlaylist } from "@/lib/spotify";
+import { scrapeSpotifyPlaylist } from "@/lib/spotify";
 import { MemoryCache } from "@/lib/memoryCache";
 import { errorResponse, jsonResponse, optionsResponse, requireApiKey } from "@/lib/apiHttp";
 import axios from "axios";
@@ -34,7 +34,6 @@ async function resolvePlaylistId(value: string) {
       const urlMatch = url.match(/playlist\/([a-zA-Z0-9]{22})/);
       if (urlMatch) return urlMatch[1];
     } catch (e) {
-      // Fallback to regex if fetch fails
       const urlMatch = url.match(/playlist\/([a-zA-Z0-9]{22})/);
       if (urlMatch) return urlMatch[1];
     }
@@ -53,49 +52,40 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const raw = searchParams.get("id") || searchParams.get("pl");
 
-  if (!raw) return errorResponse(req, "Playlist ID, URL, or 'pl' parameter is required", 400);
+  if (!raw) return errorResponse(req, "Playlist ID or URL is required", 400);
 
   const id = await resolvePlaylistId(raw);
-  if (!id) {
-    return errorResponse(req, "Invalid Spotify playlist URL or ID", 400);
-  }
+  if (!id) return errorResponse(req, "Invalid Spotify playlist URL", 400);
 
   const cacheKey = `dl:${id}`;
   const cached = dlCache.get(cacheKey);
   if (cached) return jsonResponse(req, cached, { cacheSeconds: 300 });
 
   try {
-    const playlist = await getSpotifyPlaylist(id, { maxTracks: 2000 });
-    if (!playlist) return errorResponse(req, "Playlist not found", 404);
+    // 100% WEBSCRAPER - NO Spotify API
+    const playlist = await scrapeSpotifyPlaylist(id);
+    if (!playlist) return errorResponse(req, "Playlist not found via scraper", 404);
 
     const origin = req.nextUrl.origin;
     
-    const enrichedTracks = playlist.tracks.map(track => ({
-      ...track,
-      downloadUrl: `${origin}/api/song?id=${track.id}&type=spotify`
-    }));
+    const enrichedTracks = playlist.tracks.map((track: any) => {
+      const metadata = `&title=${encodeURIComponent(track.title)}&artists=${encodeURIComponent(track.subtitle)}&enrich=true`;
+      return {
+        ...track,
+        downloadUrl: `${origin}/api/song?id=${track.id}&type=spotify&redirect=true${metadata}`,
+        streamUrl: `${origin}/api/song?id=${track.id}&type=spotify&redirect=true${metadata}`
+      };
+    });
 
     const result = {
-      id: playlist.id,
-      title: playlist.title,
-      description: playlist.description,
-      owner: playlist.owner,
-      total: playlist.total,
-      tracks: enrichedTracks
+      ...playlist,
+      tracks: enrichedTracks,
+      source: "webscraper"
     };
 
     dlCache.set(cacheKey, result);
     return jsonResponse(req, result, { cacheSeconds: 600 });
   } catch (error: unknown) {
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status;
-      if (status === 429) {
-        return errorResponse(req, "Spotify rate limit exceeded", 429);
-      }
-      if (status === 404) {
-        return errorResponse(req, "Playlist not found", 404);
-      }
-    }
     const message = error instanceof Error ? error.message : "Internal Server Error";
     return errorResponse(req, message, 500);
   }

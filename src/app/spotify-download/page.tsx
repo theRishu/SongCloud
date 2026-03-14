@@ -16,6 +16,7 @@ type DownloadTrack = {
   image: string;
   source: string;
   downloadUrl: string;
+  streamUrl?: string;
 };
 
 type PlaylistData = {
@@ -38,7 +39,7 @@ export default function SpotifyDownloadPage() {
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  const { downloadSong, playSong } = useMusic();
+  const { downloadSong, playSong, createPlaylist, addManyToPlaylist } = useMusic();
 
   const openSidebar = useCallback(() => setIsSidebarOpen(true), []);
   const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
@@ -83,6 +84,7 @@ export default function SpotifyDownloadPage() {
         artists: track.subtitle,
         image: track.image,
         source: "spotify",
+        mediaUrl: track.downloadUrl,
       });
     } finally {
       setDownloadingIndices((prev) => {
@@ -106,6 +108,24 @@ export default function SpotifyDownloadPage() {
     
     setIsDownloadingAll(false);
     showToast("Batch download complete!");
+  };
+
+  const clonePlaylist = () => {
+    if (!playlist) return;
+    
+    // Convert DownloadTracks to the Song format used in MusicContext
+    const songs = playlist.tracks.map(track => ({
+        id: track.id,
+        title: track.title,
+        artists: track.subtitle,
+        image: track.image,
+        source: "spotify",
+        mediaUrl: track.streamUrl || track.downloadUrl
+    }));
+
+    const newPlaylistId = createPlaylist(playlist.title);
+    addManyToPlaylist(newPlaylistId, songs);
+    showToast("Playlist cloned to library!");
   };
 
   const copyBashScript = () => {
@@ -179,6 +199,14 @@ export default function SpotifyDownloadPage() {
                                 </button>
                             )}
                             <button 
+                                className={dlStyles.cloneBtn}
+                                onClick={clonePlaylist}
+                                title="Clone this playlist to your local library"
+                            >
+                                <Copy size={18} />
+                                <span>Clone</span>
+                            </button>
+                            <button 
                                 className={dlStyles.downloadAllBtn}
                                 onClick={downloadAll}
                                 disabled={isDownloadingAll}
@@ -197,7 +225,13 @@ export default function SpotifyDownloadPage() {
                             <div key={track.id} className={`${dlStyles.trackItem} ${downloadingIndices.has(idx) ? dlStyles.trackItemDownloading : ''}`}>
                                 <div className={dlStyles.trackRank}>{idx + 1}</div>
                                 <div className={dlStyles.trackArt}>
-                                    <Image src={track.image} alt={track.title} fill sizes="40px" />
+                                    <Image 
+                                      src={track.image || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100&h=100&fit=crop"} 
+                                      alt={track.title} 
+                                      fill 
+                                      sizes="44px" 
+                                      className={dlStyles.trackImage}
+                                    />
                                     <button 
                                         className={dlStyles.itemPlayBtn}
                                         onClick={() => playSong({
@@ -205,7 +239,8 @@ export default function SpotifyDownloadPage() {
                                             title: track.title,
                                             artists: track.subtitle,
                                             image: track.image,
-                                            source: "spotify"
+                                            source: "spotify",
+                                            mediaUrl: track.streamUrl || track.downloadUrl,
                                         })}
                                     >
                                         <Play size={16} fill="white" />
@@ -215,17 +250,20 @@ export default function SpotifyDownloadPage() {
                                     <div className={dlStyles.trackName}>{track.title}</div>
                                     <div className={dlStyles.trackArtists}>{track.subtitle}</div>
                                 </div>
-                                <button 
-                                    className={dlStyles.trackDownloadBtn}
-                                    onClick={() => handleDownload(track, idx)}
-                                    disabled={downloadingIndices.has(idx)}
-                                >
-                                    {downloadingIndices.has(idx) ? (
-                                        <Loader2 className={dlStyles.spin} size={18} />
-                                    ) : (
-                                        <Download size={18} />
-                                    )}
-                                </button>
+                                <div className={dlStyles.trackActions}>
+                                    <button 
+                                        className={dlStyles.trackDownloadBtn}
+                                        onClick={() => handleDownload(track, idx)}
+                                        disabled={downloadingIndices.has(idx)}
+                                        title="Download"
+                                    >
+                                        {downloadingIndices.has(idx) ? (
+                                            <Loader2 className={dlStyles.spin} size={18} />
+                                        ) : (
+                                            <Download size={18} />
+                                        )}
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>

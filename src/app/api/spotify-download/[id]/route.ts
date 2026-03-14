@@ -1,8 +1,7 @@
 import { NextRequest } from "next/server";
-import { getSpotifyPlaylist, scrapeSpotifyPlaylist } from "@/lib/spotify";
+import { scrapeSpotifyPlaylist } from "@/lib/spotify";
 import { MemoryCache } from "@/lib/memoryCache";
 import { errorResponse, jsonResponse, optionsResponse, requireApiKey } from "@/lib/apiHttp";
-import axios from "axios";
 
 export const runtime = "nodejs";
 
@@ -37,39 +36,35 @@ export async function GET(
   if (cached) return jsonResponse(req, cached, { cacheSeconds: 300 });
 
   try {
-    let playlistData: any = null;
+    // 100% WEBSCRAPE - NO API TO AVOID RATE LIMITS
+    const playlistData = await scrapeSpotifyPlaylist(id);
 
-    // Use scraper first to ensure reliability and bypass rate limits
-    try {
-      playlistData = await scrapeSpotifyPlaylist(id);
-    } catch (e) {
-      console.warn("Primary scraper failed, trying API fallback...", e);
-    }
-
-    // If scraper failed, try official API
     if (!playlistData) {
-      playlistData = await getSpotifyPlaylist(id, { maxTracks: 2000 });
+      return errorResponse(req, "Could not scrape playlist. Make sure it is public.", 404);
     }
-
-    if (!playlistData) return errorResponse(req, "Playlist not found", 404);
 
     const origin = req.nextUrl.origin;
     
-    const enrichedTracks = playlistData.tracks.map((track: any) => ({
-      ...track,
-      downloadUrl: `${origin}/api/song?id=${track.id}&type=spotify`
-    }));
+    const enrichedTracks = playlistData.tracks.map((track: any) => {
+      const metadata = `&title=${encodeURIComponent(track.title)}&artists=${encodeURIComponent(track.subtitle)}&enrich=true`;
+      return {
+        ...track,
+        downloadUrl: `${origin}/api/song?id=${track.id}&type=spotify&redirect=true${metadata}`,
+        streamUrl: `${origin}/api/song?id=${track.id}&type=spotify&redirect=true${metadata}`
+      };
+    });
 
-    // Generate bash script that skips on failure (; instead of &&)
-    const bashScript = enrichedTracks.map((t: any) => 
-        `curl -L "${origin}/api/song?id=${t.id}&type=spotify" -o "${t.title.replace(/["\\]/g, '')}.mp3"`
-    ).join('; ');
+    // Generate bash script
+    const bashScript = enrichedTracks.map((t: any) => {
+        const metadata = `&title=${encodeURIComponent(t.title)}&artists=${encodeURIComponent(t.subtitle)}`;
+        return `curl -L "${origin}/api/song?id=${t.id}&type=spotify&redirect=true${metadata}" -o "${t.title.replace(/["\\]/g, '')}.mp3"`;
+    }).join('; ');
 
     const result = {
       ...playlistData,
       tracks: enrichedTracks,
       bashScript,
-      source: playlistData.scraped ? "scraper" : "api"
+      source: "webscraper"
     };
 
     dlCache.set(cacheKey, result);

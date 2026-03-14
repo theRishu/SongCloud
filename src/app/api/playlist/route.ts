@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getSpotifyPlaylist } from "@/lib/spotify";
+import { getSpotifyPlaylist, scrapeSpotifyPlaylist } from "@/lib/spotify";
 import { MemoryCache } from "@/lib/memoryCache";
 import { errorResponse, jsonResponse, optionsResponse, requireApiKey } from "@/lib/apiHttp";
 import axios from "axios";
@@ -47,43 +47,43 @@ export async function GET(req: NextRequest) {
   if (cached) return jsonResponse(req, cached, { cacheSeconds: 60 });
 
   try {
-    const playlist = await getSpotifyPlaylist(id, { maxTracks });
-    if (!playlist) return errorResponse(req, "Playlist not found", 404);
-    playlistCache.set(cacheKey, playlist as unknown as Record<string, unknown>);
-    return jsonResponse(req, playlist, { cacheSeconds: 300 });
-  } catch (error: unknown) {
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status;
-      const upstreamMessage =
-        error.response?.data && typeof error.response.data === "object"
-          ? (error.response.data as Record<string, unknown>)?.error &&
-            typeof (error.response.data as Record<string, unknown>).error === "object"
-            ? ((error.response.data as { error?: { message?: unknown } }).error?.message as unknown)
-            : null
-          : null;
-      const upstreamText = typeof upstreamMessage === "string" ? upstreamMessage : null;
+    let playlist: any = null;
 
-      if (status === 429) {
-        const retryAfter = error.response?.headers?.["retry-after"];
-        return errorResponse(req, "Spotify rate limit exceeded. Try again later.", 429, {
-          headers: retryAfter ? { "Retry-After": String(retryAfter) } : undefined,
-        });
+    // 100% WEBSCRAPER PRIORITY - NO API if possible to avoid 429
+    try {
+      playlist = await scrapeSpotifyPlaylist(id);
+      
+      // If scraper only got partial tracks and we need more, try API only as a background booster
+      if (playlist && playlist.total > (playlist.tracks?.length || 0) && playlist.total > 100) {
+          try {
+              const fullData = await getSpotifyPlaylist(id, { maxTracks });
+              if (fullData) playlist = fullData;
+          } catch (e) {
+              console.warn("API booster failed (429), staying with scraped data.");
+          }
       }
+    } catch (e) {
+      console.warn("Scraper failed, falling back to direct API...");
+    }
 
-      if (status === 401 || status === 403) {
-        return errorResponse(req, upstreamText ? `Spotify authorization failed: ${upstreamText}` : "Spotify authorization failed.", 502);
-      }
-
-      if (status === 404) {
-        return errorResponse(req, "Playlist not found", 404);
-      }
-
-      if (typeof status === "number") {
-        return errorResponse(req, upstreamText ? `Spotify API error (${status}): ${upstreamText}` : `Spotify API error (${status})`, 502);
+    // Direct API fallback if scraper completely failed
+    if (!playlist) {
+      try {
+        playlist = await getSpotifyPlaylist(id, { maxTracks });
+      } catch (error: unknown) {
+        if (axios.isAxiosError(error) && error.response?.status === 429) {
+          return errorResponse(req, "Spotify rate limit exceeded. Using scraper fallback next time...", 429);
+        }
+        throw error;
       }
     }
 
-    const message = error instanceof Error ? error.message : "Unknown error";
+    if (!playlist) return errorResponse(req, "Playlist not found", 404);
+
+    playlistCache.set(cacheKey, playlist as unknown as Record<string, unknown>);
+    return jsonResponse(req, playlist, { cacheSeconds: 300 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Internal Error";
     return errorResponse(req, message, 500);
   }
 }

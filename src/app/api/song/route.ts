@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { getSongDetails } from "@/lib/jiosaavn";
-import { getSpotifyTrack } from "@/lib/spotify";
+import { getSongDetails as getJioDetails, searchJioSaavn } from "@/lib/jiosaavn";
 import { getTidalId, getHighQualityStream } from "@/lib/tidal";
+import { getSpotifyTrack } from "@/lib/spotify";
 import { MemoryCache } from "@/lib/memoryCache";
 import { errorResponse, jsonResponse, optionsResponse, requireApiKey } from "@/lib/apiHttp";
 
@@ -32,36 +32,114 @@ export async function GET(req: NextRequest) {
   if (!id) return errorResponse(req, "ID is required", 400);
   if (id.length > 128) return errorResponse(req, "ID too long", 400);
   if (!type) return errorResponse(req, "Invalid type", 400);
-  if (type === "spotify" && !/^[a-zA-Z0-9]{22}$/.test(id)) return errorResponse(req, "Invalid Spotify track id", 400);
-
+  
   const cacheKey = `${type}:${id}`;
   const cached = songCache.get(cacheKey);
   if (cached) return jsonResponse(req, cached, { cacheSeconds: 60 });
 
   try {
-    let result: Record<string, unknown>;
+    let result: Record<string, unknown> = {};
     let status = 200;
+    let hqUrl: string | null = null;
+
     if (type === "spotify") {
-      const [track, tidalId] = await Promise.all([getSpotifyTrack(id), getTidalId(id)]);
-      let hqUrl = null;
-      if (tidalId) {
-        hqUrl = await getHighQualityStream(tidalId, "LOSSLESS");
+      const qTitle = searchParams.get("title");
+      const qArtists = searchParams.get("artists") || searchParams.get("subtitle");
+      const shouldEnrich = searchParams.get("enrich") === "true";
+      
+      let track: any = null;
+      if (qTitle && qArtists) {
+        track = { title: qTitle, artists: qArtists, id };
+      } else {
+        try {
+          track = await getSpotifyTrack(id);
+        } catch (e) {
+          console.warn("Spotify API metadata fetch failed, using minimal info.");
+          track = { title: "Unknown Track", artists: "Unknown Artist", id };
+        }
       }
 
-      if (hqUrl) {
-        result = { ...track, mediaUrl: hqUrl, quality: "FLAC" };
+      // MusicBrainz Enrichment for "Official" feeling
+      if (shouldEnrich) {
+        try {
+          const { searchMusicBrainz, getCoverArt } = await import("@/lib/musicbrainz");
+          const mbData = await searchMusicBrainz(track.title, track.artists);
+          if (mbData) {
+              track.officialTitle = mbData.title;
+              track.officialArtist = mbData.artist;
+              track.mbid = mbData.mbid;
+              if (mbData.releaseId) {
+                  const officialArt = await getCoverArt(mbData.releaseId);
+                  if (officialArt) track.image = officialArt;
+              }
+          }
+        } catch (e) {
+             console.warn("MusicBrainz enrichment failed, continuing...");
+        }
+      }
+
+      const tidalId = await getTidalId(id).catch(() => null);
+      let hqUrl = null;
+      if (tidalId) {
+        hqUrl = await getHighQualityStream(tidalId, "LOSSLESS").catch(() => null);
+      }
+
+      // If Tidal fails or returns a preview (sanity check), use JioSaavn (Full 320kbps)
+      const isLikelyPreview = (url: string | null) => !url || url.includes("p.scdn.co") || url.includes("mp3-preview");
+      
+      if (isLikelyPreview(hqUrl)) {
+        const { searchJioSaavn, getSongDetails: getJioDetails } = await import("@/lib/jiosaavn");
+        const query = `${track.title} ${track.artists}`.trim();
+        const jioResults = await searchJioSaavn(query);
+        
+        if (jioResults.length > 0) {
+          const firstMatch = await getJioDetails(jioResults[0].id);
+          if (firstMatch?.mediaUrl && !isLikelyPreview(firstMatch.mediaUrl)) {
+            hqUrl = firstMatch.mediaUrl;
+            result = {
+              ...track,
+              image: track.image || firstMatch.image,
+              album: firstMatch.album,
+              duration: firstMatch.duration,
+              quality: firstMatch.quality || "320kbps",
+              source: "jio_full_stream_official"
+            };
+          }
+        }
+      } else {
+        result = {
+          ...track,
+          mediaUrl: hqUrl,
+          quality: "FLAC",
+          source: "tidal_full_stream_official"
+        };
+      }
+
+      if (hqUrl && !isLikelyPreview(hqUrl)) {
+        if (searchParams.get("redirect") === "true") {
+          return Response.redirect(hqUrl, 302);
+        }
+        result.mediaUrl = hqUrl;
       } else {
         status = 404;
-        result = { error: "Stream not available" };
+        result = { error: "Strict Policy: Full-length audio only. No high-quality source found for this track." };
       }
     } else {
-      const details = await getSongDetails(id);
+      // JioSaavn Direct Resolution
+      const details = await getJioDetails(id);
       if (!details) return errorResponse(req, "Song not found", 404);
       result = details as unknown as Record<string, unknown>;
+      
+      if (searchParams.get("redirect") === "true" && typeof result.mediaUrl === "string") {
+        return Response.redirect(result.mediaUrl, 302);
+      }
+      
       if (typeof result.error === "string") status = 502;
     }
 
-    songCache.set(cacheKey, result);
+    if (status === 200 && result.mediaUrl) {
+        songCache.set(cacheKey, result);
+    }
     return jsonResponse(req, result, { status, cacheSeconds: 60 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";

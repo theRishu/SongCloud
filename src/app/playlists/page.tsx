@@ -76,7 +76,13 @@ export default function PlaylistsPage() {
 
     setIsImporting(true);
     try {
-      const res = await fetch(`/api/playlist?id=${encodeURIComponent(raw)}&limit=2000`);
+      const cleaned = raw.trim();
+      const isIdOnly = /^[a-zA-Z0-9]{22}$/.test(cleaned);
+      const apiEndpoint = isIdOnly 
+        ? `/api/spotify-download/${cleaned}` 
+        : `/api/spotify-download?id=${encodeURIComponent(cleaned)}`;
+
+      const res = await fetch(apiEndpoint);
       const data: unknown = await res.json().catch(() => null);
       const obj = data as Partial<PlaylistApiResponse> & { error?: string };
 

@@ -195,6 +195,26 @@
     border-color: rgba(255, 255, 255, 0.3);
 }
 
+.cloneBtn {
+    background: rgba(167, 139, 250, 0.15);
+    color: #c4b5fd;
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    padding: 0.85rem 1.75rem;
+    border-radius: 2.5rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    transition: all 0.3s;
+}
+
+.cloneBtn:hover {
+    background: rgba(167, 139, 250, 0.25);
+    transform: translateY(-2px);
+    border-color: rgba(167, 139, 250, 0.5);
+}
+
 .downloadAllBtn {
     background: white;
     color: black;
@@ -345,6 +365,14 @@
     100% { transform: scale(1); opacity: 0.15; }
 }
 
+.trackImage {
+    object-fit: cover;
+}
+
+.trackActions {
+    margin-left: auto;
+}
+
 .spin {
     animation: spin 1s linear infinite;
 }
@@ -356,29 +384,64 @@
 
 @media (max-width: 768px) {
     .container {
-        padding-top: 3rem;
+        padding-top: 4rem;
+        padding-bottom: 8rem; /* Space for player */
     }
     .title {
-        font-size: 2rem;
+        font-size: 1.8rem;
+    }
+    .subtitle {
+        font-size: 0.9rem;
     }
     .searchBox {
         flex-direction: column;
+        padding: 0.75rem;
     }
     .fetchBtn {
         width: 100%;
-        padding: 1rem;
+        padding: 0.85rem;
+        min-width: 0;
     }
     .playlistInfo {
         flex-direction: column;
         align-items: flex-start;
-        gap: 2rem;
+        gap: 1.5rem;
+    }
+    .playlistTitle {
+        font-size: 1.6rem;
     }
     .batchActions {
         width: 100%;
-        flex-direction: column;
+        flex-direction: row;
+        flex-wrap: wrap;
     }
     .downloadAllBtn, .toolBtn {
-        width: 100%;
+        flex: 1;
+        min-width: 140px;
         justify-content: center;
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+    }
+    
+    .trackItem {
+        padding: 0.6rem 0.75rem;
+        gap: 0.75rem;
+    }
+    .trackRank {
+        width: 1.2rem;
+        font-size: 0.8rem;
+    }
+    .trackDetails {
+        flex: 1;
+    }
+    .trackName {
+        font-size: 0.95rem;
+    }
+    .trackArtists {
+        font-size: 0.8rem;
+    }
+    .trackDownloadBtn {
+        width: 36px;
+        height: 36px;
     }
 }
