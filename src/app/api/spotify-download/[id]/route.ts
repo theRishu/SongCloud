@@ -5,7 +5,8 @@ import { errorResponse, jsonResponse, optionsResponse, requireApiKey } from "@/l
 
 export const runtime = "nodejs";
 
-const dlCache = new MemoryCache<any>({ maxEntries: 100, ttlMs: 15 * 60_000 });
+type PlaylistResponse = Record<string, unknown>;
+const dlCache = new MemoryCache<PlaylistResponse>({ maxEntries: 100, ttlMs: 15 * 60_000 });
 
 export function OPTIONS(req: NextRequest) {
   return optionsResponse(req);
@@ -45,32 +46,36 @@ export async function GET(
 
     const origin = req.nextUrl.origin;
     
-    const enrichedTracks = playlistData.tracks.map((track: any) => {
+    const enrichedTracks = playlistData.tracks.map((track: Record<string, unknown>) => {
+      const trackId = typeof track.id === "string" ? track.id : "";
+      const trackTitle = typeof track.title === "string" ? track.title : "";
       const artistText =
         typeof track.artists === "string"
           ? track.artists
           : typeof track.subtitle === "string"
           ? track.subtitle
           : "";
-      const metadata = `&title=${encodeURIComponent(track.title)}&artists=${encodeURIComponent(artistText)}`;
+      const metadata = `&title=${encodeURIComponent(trackTitle)}&artists=${encodeURIComponent(artistText)}`;
       return {
         ...track,
-        downloadUrl: `${origin}/api/song?id=${track.id}&type=spotify_playlist&redirect=true${metadata}`,
-        streamUrl: `${origin}/api/song?id=${track.id}&type=spotify_playlist&redirect=true${metadata}`,
+        downloadUrl: `${origin}/api/song?id=${trackId}&type=spotify_playlist&redirect=true${metadata}`,
+        streamUrl: `${origin}/api/song?id=${trackId}&type=spotify_playlist&redirect=true${metadata}`,
       };
     });
 
     // Generate bash script
     const bashScript = enrichedTracks
-      .map((t: any) => {
+      .map((t: Record<string, unknown>) => {
+        const tId = typeof t.id === "string" ? t.id : "";
+        const tTitle = typeof t.title === "string" ? t.title : "";
         const artistText =
           typeof t.artists === "string"
             ? t.artists
             : typeof t.subtitle === "string"
             ? t.subtitle
             : "";
-        const metadata = `&title=${encodeURIComponent(t.title)}&artists=${encodeURIComponent(artistText)}`;
-        return `curl -L "${origin}/api/song?id=${t.id}&type=spotify_playlist&redirect=true${metadata}" -o "${t.title.replace(/["\\]/g, "")}.mp3"`;
+        const metadata = `&title=${encodeURIComponent(tTitle)}&artists=${encodeURIComponent(artistText)}`;
+        return `curl -L "${origin}/api/song?id=${tId}&type=spotify_playlist&redirect=true${metadata}" -o "${tTitle.replace(/["\\]/g, "")}.mp3"`;
       })
       .join("; ");
 

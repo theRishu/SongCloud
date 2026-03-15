@@ -33,7 +33,7 @@ export async function getCoverArt(releaseMbid: string) {
         const url = `https://coverartarchive.org/release/${releaseMbid}`;
         const response = await axios.get(url);
         return response.data.images?.[0]?.image ?? null;
-    } catch (error) {
+    } catch {
         // Many releases don't have cover art in CAA
         return null;
     }

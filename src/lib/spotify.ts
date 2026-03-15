@@ -5,8 +5,6 @@ import { searchJioSaavn } from "./jiosaavn";
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
 
-type ImageSource = { url?: string; width?: number; height?: number };
-
 type ScrapedTrack = {
   id: string;
   title: string;
@@ -301,6 +299,7 @@ function isPlaylistEntity(entity: unknown, playlistId: string) {
 }
 
 function findPlaylistEntity(root: Record<string, unknown>, playlistId: string): Record<string, unknown> | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const anyRoot = root as any;
   const direct = anyRoot?.props?.pageProps?.state?.data?.entity;
   if (isPlaylistEntity(direct, playlistId)) return direct as Record<string, unknown>;
@@ -571,7 +570,7 @@ export async function scrapeSpotifyPlaylist(playlistId: string): Promise<Scraped
             track.image = image;
             track.thumbnail = image;
           }
-        } catch (e) {
+        } catch {
           // Keep playlist image as fallback
         }
       }

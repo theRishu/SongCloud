@@ -39,7 +39,6 @@ export async function GET(req: NextRequest) {
   try {
     let result: Record<string, unknown> = {};
     let status = 200;
-    let hqUrl: string | null = null;
 
     if (type === "spotify_playlist") {
       const qTitle = searchParams.get("title");
@@ -73,19 +72,19 @@ export async function GET(req: NextRequest) {
             };
           }
         }
-      } catch (e) {
+      } catch {
         console.warn("JioSaavn resolution failed, trying Tidal fallback.");
       }
 
       if (!resolved) {
         const tidalId = await getTidalId(id).catch(() => null);
-        const hqUrl = tidalId ? await getHighQualityStream(tidalId, "LOSSLESS").catch(() => null) : null;
-        if (hqUrl && !isLikelyPreview(hqUrl)) {
+        const tidalUrl = tidalId ? await getHighQualityStream(tidalId, "LOSSLESS").catch(() => null) : null;
+        if (tidalUrl && !isLikelyPreview(tidalUrl)) {
           resolved = true;
           result = {
             title: qTitle,
             artists: qArtists,
-            mediaUrl: hqUrl,
+            mediaUrl: tidalUrl,
             quality: "FLAC",
             source: "tidal_full_stream_official",
           };

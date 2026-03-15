@@ -76,8 +76,8 @@ export default function SpotifyDownloadPage() {
         throw new Error(data.error || "Failed to fetch playlist");
       }
       setPlaylist(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setIsLoading(false);
     }
