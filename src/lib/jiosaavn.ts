@@ -81,7 +81,7 @@ export async function searchJioSaavn(query: string) {
                     id: song.id,
                     title: formatString(song.title),
                     subtitle: formatString(song.subtitle ?? ''),
-                    image: song.image.replace("150x150", "500x500"),
+                    image: song.image.replace(/50x50|150x150/g, "500x500"),
                     url: song.url,
                     source: "jio",
                 }
@@ -112,7 +112,7 @@ export async function getSongDetails(id: string) {
             title: formatString(song.song),
             album: formatString(song.album),
             artists: formatString(song.primary_artists),
-            image: song.image.replace("150x150", "500x500"),
+            image: song.image.replace(/50x50|150x150/g, "500x500"),
             mediaUrl: mediaUrl ?? undefined,
             duration: song.duration,
             releaseDate: song.release_date,

@@ -16,25 +16,26 @@
 .blobOne,
 .blobTwo {
   position: absolute;
-  width: 40vw;
-  height: 40vw;
-  max-width: 520px;
-  max-height: 520px;
+  width: 42vw;
+  height: 42vw;
+  max-width: 560px;
+  max-height: 560px;
   border-radius: 9999px;
-  filter: blur(120px);
+  filter: blur(130px);
   transform: translateZ(0);
+  opacity: 0.9;
 }
 
 .blobOne {
-  top: -10%;
-  left: -10%;
+  top: -12%;
+  left: -12%;
   background: var(--primary-glow);
-  animation: pulse 4s ease-in-out infinite;
+  animation: pulse 5.2s ease-in-out infinite;
 }
 
 .blobTwo {
-  bottom: -10%;
-  right: -10%;
+  bottom: -12%;
+  right: -12%;
   background: var(--secondary-glow);
 }
 
@@ -64,11 +65,17 @@
   0%,
   100% {
     transform: scale(1);
-    opacity: 0.75;
+    opacity: 0.78;
   }
   50% {
     transform: scale(1.08);
     opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blobOne {
+    animation: none;
   }
 }
 

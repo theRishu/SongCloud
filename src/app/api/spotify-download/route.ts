@@ -69,18 +69,38 @@ export async function GET(req: NextRequest) {
     const origin = req.nextUrl.origin;
     
     const enrichedTracks = playlist.tracks.map((track: any) => {
-      const metadata = `&title=${encodeURIComponent(track.title)}&artists=${encodeURIComponent(track.subtitle)}&enrich=true`;
+      const artistText =
+        typeof track.artists === "string"
+          ? track.artists
+          : typeof track.subtitle === "string"
+          ? track.subtitle
+          : "";
+      const metadata = `&title=${encodeURIComponent(track.title)}&artists=${encodeURIComponent(artistText)}`;
       return {
         ...track,
-        downloadUrl: `${origin}/api/song?id=${track.id}&type=spotify&redirect=true${metadata}`,
-        streamUrl: `${origin}/api/song?id=${track.id}&type=spotify&redirect=true${metadata}`
+        downloadUrl: `${origin}/api/song?id=${track.id}&type=spotify_playlist&redirect=true${metadata}`,
+        streamUrl: `${origin}/api/song?id=${track.id}&type=spotify_playlist&redirect=true${metadata}`,
       };
     });
+
+    const bashScript = enrichedTracks
+      .map((t: any) => {
+        const artistText =
+          typeof t.artists === "string"
+            ? t.artists
+            : typeof t.subtitle === "string"
+            ? t.subtitle
+            : "";
+        const metadata = `&title=${encodeURIComponent(t.title)}&artists=${encodeURIComponent(artistText)}`;
+        return `curl -L "${origin}/api/song?id=${t.id}&type=spotify_playlist&redirect=true${metadata}" -o "${t.title.replace(/["\\]/g, "")}.mp3"`;
+      })
+      .join("; ");
 
     const result = {
       ...playlist,
       tracks: enrichedTracks,
-      source: "webscraper"
+      bashScript,
+      source: "webscraper",
     };
 
     dlCache.set(cacheKey, result);

@@ -39,7 +39,7 @@ function normalizeTrending(data: unknown): TrendingItem[] {
       id: String(id),
       title,
       subtitle: "Top Chart",
-      image: image.replace("150x150", "500x500"),
+      image: image.replace(/50x50|150x150/g, "500x500"),
     });
   }
   return mapped;

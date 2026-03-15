@@ -1,8 +1,7 @@
 import { NextRequest } from "next/server";
-import { getSpotifyPlaylist, scrapeSpotifyPlaylist } from "@/lib/spotify";
+import { scrapeSpotifyPlaylist } from "@/lib/spotify";
 import { MemoryCache } from "@/lib/memoryCache";
 import { errorResponse, jsonResponse, optionsResponse, requireApiKey } from "@/lib/apiHttp";
-import axios from "axios";
 
 export const runtime = "nodejs";
 
@@ -47,41 +46,18 @@ export async function GET(req: NextRequest) {
   if (cached) return jsonResponse(req, cached, { cacheSeconds: 60 });
 
   try {
-    let playlist: any = null;
-
-    // 100% WEBSCRAPER PRIORITY - NO API if possible to avoid 429
-    try {
-      playlist = await scrapeSpotifyPlaylist(id);
-      
-      // If scraper only got partial tracks and we need more, try API only as a background booster
-      if (playlist && playlist.total > (playlist.tracks?.length || 0) && playlist.total > 100) {
-          try {
-              const fullData = await getSpotifyPlaylist(id, { maxTracks });
-              if (fullData) playlist = fullData;
-          } catch (e) {
-              console.warn("API booster failed (429), staying with scraped data.");
-          }
-      }
-    } catch (e) {
-      console.warn("Scraper failed, falling back to direct API...");
-    }
-
-    // Direct API fallback if scraper completely failed
-    if (!playlist) {
-      try {
-        playlist = await getSpotifyPlaylist(id, { maxTracks });
-      } catch (error: unknown) {
-        if (axios.isAxiosError(error) && error.response?.status === 429) {
-          return errorResponse(req, "Spotify rate limit exceeded. Using scraper fallback next time...", 429);
-        }
-        throw error;
-      }
-    }
-
+    const playlist = await scrapeSpotifyPlaylist(id);
     if (!playlist) return errorResponse(req, "Playlist not found", 404);
 
-    playlistCache.set(cacheKey, playlist as unknown as Record<string, unknown>);
-    return jsonResponse(req, playlist, { cacheSeconds: 300 });
+    const limitedTracks = playlist.tracks.slice(0, maxTracks);
+    const response = {
+      ...playlist,
+      tracks: limitedTracks,
+      truncated: playlist.total > limitedTracks.length,
+    };
+
+    playlistCache.set(cacheKey, response as unknown as Record<string, unknown>);
+    return jsonResponse(req, response, { cacheSeconds: 300 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Internal Error";
     return errorResponse(req, message, 500);

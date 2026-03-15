@@ -37,7 +37,7 @@
   background: var(--primary);
   display: grid;
   place-items: center;
-  box-shadow: 0 10px 30px rgba(139, 92, 246, 0.2);
+  box-shadow: 0 10px 30px var(--primary-glow);
 }
 
 .brandText {

@@ -1,433 +1,612 @@
-import axios from 'axios';
-import crypto from 'crypto';
-import base32Decode from 'base32-decode';
-import { MemoryCache } from './memoryCache';
+import axios from "axios";
+import { MemoryCache } from "./memoryCache";
+import { searchJioSaavn } from "./jiosaavn";
 
-const SPOTIFY_TOTP_SECRET = "GM3TMMJTGYZTQNZVGM4DINJZHA4TGOBYGMZTCMRTGEYDSMJRHE4TEOBUG4YTCMRUGQ4DQOJUGQYTAMRRGA2TCMJSHE3TCMBY";
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
 
-type SpotifyTokenResponse = {
-    accessToken: string;
-    clientId: string;
-    accessTokenExpirationTimestampMs?: number;
+type ImageSource = { url?: string; width?: number; height?: number };
+
+type ScrapedTrack = {
+  id: string;
+  title: string;
+  subtitle: string;
+  artists: string;
+  album?: string;
+  duration?: number;
+  image: string;
+  thumbnail: string;
+  source: "spotify_playlist";
 };
 
-type SpotifyClientCredentialsResponse = {
-    access_token: string;
-    token_type: "Bearer";
-    expires_in: number;
+type ScrapedPlaylist = {
+  id: string;
+  title: string;
+  description: string;
+  image: string;
+  owner: string;
+  total: number;
+  tracks: ScrapedTrack[];
+  truncated: boolean;
+  scraped: boolean;
 };
 
-type SpotifyArtist = { name: string };
-type SpotifyImage = { url: string };
-type SpotifyAlbum = { name: string; images: SpotifyImage[] };
+const scrapeCache = new MemoryCache<ScrapedPlaylist>({ maxEntries: 100, ttlMs: 10 * 60_000 });
+const coverCache = new MemoryCache<string>({ maxEntries: 5000, ttlMs: 48 * 60 * 60_000 });
 
-type SpotifyTrack = {
-    id: string;
-    name: string;
-    artists: SpotifyArtist[];
-    album: SpotifyAlbum;
-    duration_ms: number;
-    explicit: boolean;
-    external_urls: {
-        spotify: string;
-    };
-};
-
-type SpotifySearchResponse = {
-    tracks: {
-        items: SpotifyTrack[];
-    };
-};
-
-type SpotifyPlaylistMetaResponse = {
-    id: string;
-    name: string;
-    description: string;
-    images: SpotifyImage[];
-    owner: {
-        display_name: string;
-    };
-    tracks: {
-        total: number;
-    };
-};
-
-type SpotifyPlaylistTracksPageResponse = {
-    items: Array<{
-        track: SpotifyTrack | null;
-    }>;
-    next: string | null;
-    total: number;
-    offset: number;
-    limit: number;
-};
-
-let cachedSpotifyToken: { accessToken: string; clientId: string; expiresAtMs: number } | null = null;
-
-// Simple TOTP generator
-function generateTOTP(secret: string) {
-    const key = Buffer.from(base32Decode(secret, 'RFC4648'));
-    const epoch = Math.floor(Date.now() / 1000);
-    const time = Buffer.alloc(8);
-    time.writeBigInt64BE(BigInt(Math.floor(epoch / 30)));
-
-    const hmac = crypto.createHmac('sha1', key);
-    hmac.update(time);
-    const digest = hmac.digest();
-
-    const offset = digest[digest.length - 1] & 0xf;
-    const code = (
-        ((digest[offset] & 0x7f) << 24) |
-        ((digest[offset + 1] & 0xff) << 16) |
-        ((digest[offset + 2] & 0xff) << 8) |
-        (digest[offset + 3] & 0xff)
-    ) % 1000000;
-
-    return code.toString().padStart(6, '0');
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
 }
 
-export async function getSpotifyToken() {
-    const now = Date.now();
-    if (cachedSpotifyToken && cachedSpotifyToken.expiresAtMs - 30_000 > now) {
-        return { accessToken: cachedSpotifyToken.accessToken, clientId: cachedSpotifyToken.clientId };
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function trackKey(title: string, artists: string) {
+  return `${normalizeText(title)}|${normalizeText(artists)}`;
+}
+
+function pickLargestImage(sources: unknown): string {
+  if (!Array.isArray(sources)) return "";
+  const candidates: Array<{ url: string; score: number }> = [];
+
+  for (const src of sources) {
+    if (typeof src === "string") {
+      candidates.push({ url: src, score: 0 });
+      continue;
+    }
+    if (isRecord(src) && typeof src.url === "string") {
+      const widthRaw = src.width ?? src.w;
+      const heightRaw = src.height ?? src.h;
+      const width =
+        typeof widthRaw === "number"
+          ? widthRaw
+          : typeof widthRaw === "string"
+          ? Number.parseInt(widthRaw, 10)
+          : 0;
+      const height =
+        typeof heightRaw === "number"
+          ? heightRaw
+          : typeof heightRaw === "string"
+          ? Number.parseInt(heightRaw, 10)
+          : 0;
+      candidates.push({ url: src.url, score: width * height });
+    }
+  }
+
+  if (candidates.length === 0) return "";
+  candidates.sort((a, b) => b.score - a.score);
+  if (candidates[0].score === 0) return candidates[candidates.length - 1].url;
+  return candidates[0].url;
+}
+
+function upgradeSpotifyImageUrl(url: string): string {
+  if (!url) return url;
+  let upgraded = url;
+  const sizeMap: Record<string, string> = {
+    "00001e02": "0000b273",
+    "00004851": "0000b273",
+  };
+  for (const [from, to] of Object.entries(sizeMap)) {
+    if (upgraded.includes(from)) {
+      upgraded = upgraded.replace(from, to);
+    }
+  }
+  if (upgraded.includes("w=")) {
+    upgraded = upgraded.replace(/w=\d+/g, "w=640");
+  }
+  if (upgraded.includes("h=")) {
+    upgraded = upgraded.replace(/h=\d+/g, "h=640");
+  }
+  return upgraded;
+}
+
+function isLowResImage(url: string): boolean {
+  if (!url) return true;
+  const lower = url.toLowerCase();
+  if (lower.includes("00001e02") || lower.includes("00004851")) return true;
+  const dimMatch = lower.match(/(\d{2,3})x(\d{2,3})/);
+  if (dimMatch) {
+    const w = Number.parseInt(dimMatch[1], 10);
+    const h = Number.parseInt(dimMatch[2], 10);
+    if (Number.isFinite(w) && Number.isFinite(h) && Math.max(w, h) <= 360) return true;
+  }
+  const wMatch = lower.match(/w=(\d{2,3})/);
+  const hMatch = lower.match(/h=(\d{2,3})/);
+  const w = wMatch ? Number.parseInt(wMatch[1], 10) : null;
+  const h = hMatch ? Number.parseInt(hMatch[1], 10) : null;
+  if (w && w <= 360) return true;
+  if (h && h <= 360) return true;
+  return false;
+}
+
+function imageScore(url: string): number {
+  if (!url) return 0;
+  const lower = url.toLowerCase();
+  let score = 1000;
+  const dimMatch = lower.match(/(\d{2,4})x(\d{2,4})/);
+  if (dimMatch) {
+    const w = Number.parseInt(dimMatch[1], 10);
+    const h = Number.parseInt(dimMatch[2], 10);
+    if (Number.isFinite(w) && Number.isFinite(h)) score = w * h;
+  }
+  const wMatch = lower.match(/w=(\d{2,4})/);
+  const hMatch = lower.match(/h=(\d{2,4})/);
+  if (wMatch && hMatch) {
+    const w = Number.parseInt(wMatch[1], 10);
+    const h = Number.parseInt(hMatch[1], 10);
+    if (Number.isFinite(w) && Number.isFinite(h)) score = w * h;
+  }
+  if (lower.includes("0000b273")) score += 200000;
+  return score;
+}
+
+function extractImageFromRecord(record: unknown): string {
+  if (!isRecord(record)) return "";
+  const directUrl = typeof record.image === "string" ? record.image : "";
+  if (directUrl) return directUrl;
+
+  const coverArt = isRecord(record["coverArt"]) ? record["coverArt"] : null;
+  const imageObj = isRecord(record["image"]) ? record["image"] : null;
+  const coverArtAlt = isRecord(record["cover_art"]) ? record["cover_art"] : null;
+  const sources =
+    (coverArt && coverArt["sources"]) ??
+    record["images"] ??
+    (imageObj && imageObj["sources"]) ??
+    (coverArtAlt && coverArtAlt["sources"]);
+  return pickLargestImage(sources);
+}
+
+function parseTrackIdFromString(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes("spotify:track:")) {
+    const parts = trimmed.split("spotify:track:");
+    const last = parts[parts.length - 1];
+    return last ? last.split("?")[0] : null;
+  }
+  const urlMatch = trimmed.match(/track\/([a-zA-Z0-9]{16,})/);
+  if (urlMatch) return urlMatch[1];
+  if (/^[a-zA-Z0-9]{16,}$/.test(trimmed)) return trimmed;
+  return null;
+}
+
+function extractTrackId(track: Record<string, unknown>): string | null {
+  const directKeys = ["id", "trackId", "track_id", "uid"];
+  for (const key of directKeys) {
+    const value = track[key];
+    if (typeof value === "string") {
+      const parsed = parseTrackIdFromString(value);
+      if (parsed) return parsed;
+    }
+  }
+
+  const uriCandidates = ["uri", "trackUri", "track_uri", "link", "url"];
+  for (const key of uriCandidates) {
+    const value = track[key];
+    if (typeof value === "string") {
+      const parsed = parseTrackIdFromString(value);
+      if (parsed) return parsed;
+    }
+  }
+  return null;
+}
+
+function extractTitle(track: Record<string, unknown>): string | null {
+  const nestedTrack = isRecord(track["track"]) ? track["track"] : null;
+  const title =
+    (typeof track.title === "string" && track.title) ||
+    (typeof track.name === "string" && track.name) ||
+    (nestedTrack && typeof nestedTrack["name"] === "string" && (nestedTrack["name"] as string));
+  return title || null;
+}
+
+function extractArtists(track: Record<string, unknown>): string {
+  if (typeof track.subtitle === "string" && track.subtitle.trim()) return track.subtitle.trim();
+  if (typeof track.artists === "string" && track.artists.trim()) return track.artists.trim();
+
+  const rawArtists = track.artists;
+  if (Array.isArray(rawArtists)) {
+    const names = rawArtists
+      .map((artist) => (isRecord(artist) && typeof artist.name === "string" ? artist.name : null))
+      .filter((name): name is string => Boolean(name));
+    if (names.length > 0) return names.join(", ");
+  }
+
+  const nestedTrack = isRecord(track["track"]) ? track["track"] : null;
+  if (nestedTrack && Array.isArray(nestedTrack["artists"])) {
+    const names = (nestedTrack["artists"] as unknown[])
+      .map((artist) => (isRecord(artist) && typeof artist.name === "string" ? artist.name : null))
+      .filter((name): name is string => Boolean(name));
+    if (names.length > 0) return names.join(", ");
+  }
+
+  return "";
+}
+
+function extractAlbum(track: Record<string, unknown>): string | undefined {
+  const nestedTrack = isRecord(track["track"]) ? track["track"] : null;
+  const nestedAlbum =
+    nestedTrack && isRecord(nestedTrack["album"]) ? (nestedTrack["album"] as Record<string, unknown>) : null;
+  const album =
+    (isRecord(track.album) && typeof track.album.name === "string" && track.album.name) ||
+    (isRecord(track.album) && typeof track.album.title === "string" && track.album.title) ||
+    (nestedAlbum && typeof nestedAlbum["name"] === "string" && (nestedAlbum["name"] as string));
+  return album || undefined;
+}
+
+function extractDuration(track: Record<string, unknown>): number | undefined {
+  const durationRaw =
+    (typeof track.durationMs === "number" && track.durationMs) ||
+    (typeof track.duration_ms === "number" && track.duration_ms) ||
+    (typeof track.duration === "number" && track.duration);
+  if (!durationRaw) return undefined;
+  if (durationRaw > 1000) return Math.round(durationRaw / 1000);
+  return durationRaw;
+}
+
+function extractTrackImage(track: Record<string, unknown>, playlistImage: string): string {
+  const trackImage = extractImageFromRecord(track);
+  if (trackImage) return trackImage;
+
+  if (isRecord(track["album"])) {
+    const albumImage = extractImageFromRecord(track["album"]);
+    if (albumImage) return albumImage;
+  }
+
+  const nestedTrack = isRecord(track["track"]) ? track["track"] : null;
+  if (nestedTrack && isRecord(nestedTrack["album"])) {
+    const albumImage = extractImageFromRecord(nestedTrack["album"]);
+    if (albumImage) return albumImage;
+  }
+
+  if (isRecord(track["albumOfTrack"])) {
+    const albumImage = extractImageFromRecord(track["albumOfTrack"]);
+    if (albumImage) return albumImage;
+  }
+
+  return playlistImage;
+}
+
+function unwrapTrack(item: unknown): Record<string, unknown> | null {
+  if (!isRecord(item)) return null;
+  if (isRecord(item.track)) return item.track as Record<string, unknown>;
+  if (isRecord(item.item)) return item.item as Record<string, unknown>;
+  if (isRecord(item.data)) return item.data as Record<string, unknown>;
+  if (isRecord(item.content)) return item.content as Record<string, unknown>;
+  if (isRecord(item.track_data)) return item.track_data as Record<string, unknown>;
+  if (isRecord(item.trackData)) return item.trackData as Record<string, unknown>;
+  return item;
+}
+
+function parseNextData(html: string): Record<string, unknown> | null {
+  const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+function isPlaylistEntity(entity: unknown, playlistId: string) {
+  if (!isRecord(entity)) return false;
+  const id = typeof entity.id === "string" ? entity.id : null;
+  const uri = typeof entity.uri === "string" ? entity.uri : null;
+  if (id !== playlistId && uri !== `spotify:playlist:${playlistId}`) return false;
+  return typeof entity.name === "string" || typeof entity.title === "string";
+}
+
+function findPlaylistEntity(root: Record<string, unknown>, playlistId: string): Record<string, unknown> | null {
+  const anyRoot = root as any;
+  const direct = anyRoot?.props?.pageProps?.state?.data?.entity;
+  if (isPlaylistEntity(direct, playlistId)) return direct as Record<string, unknown>;
+
+  const candidate =
+    anyRoot?.props?.pageProps?.state?.data?.entities?.items?.[playlistId] ??
+    anyRoot?.props?.pageProps?.state?.data?.entities?.[playlistId];
+  if (isPlaylistEntity(candidate, playlistId)) return candidate as Record<string, unknown>;
+
+  const queue: unknown[] = [root];
+  const visited = new Set<object>();
+  while (queue.length > 0) {
+    const node = queue.shift();
+    if (!isRecord(node)) continue;
+    if (visited.has(node)) continue;
+    visited.add(node);
+
+    if (isPlaylistEntity(node, playlistId)) return node;
+
+    for (const value of Object.values(node)) {
+      if (isRecord(value) || Array.isArray(value)) queue.push(value);
+    }
+  }
+  return null;
+}
+
+function looksLikeTrackItem(item: unknown): boolean {
+  const raw = unwrapTrack(item);
+  if (!raw) return false;
+  const id = extractTrackId(raw);
+  if (id) return true;
+  const uri = typeof raw.uri === "string" ? raw.uri : null;
+  const trackUri = typeof raw.trackUri === "string" ? raw.trackUri : null;
+  return Boolean((uri && uri.includes("spotify:track")) || (trackUri && trackUri.includes("spotify:track")));
+}
+
+function extractTrackContainer(root: unknown) {
+  const queue: unknown[] = [root];
+  const visited = new Set<object>();
+
+  while (queue.length > 0) {
+    const node = queue.shift();
+    if (!isRecord(node)) {
+      if (Array.isArray(node)) {
+        for (const item of node) queue.push(item);
+      }
+      continue;
+    }
+    if (visited.has(node)) continue;
+    visited.add(node);
+
+    const items =
+      (Array.isArray(node.items) && node.items) ||
+      (Array.isArray(node.trackList) && node.trackList) ||
+      (isRecord(node.tracks) && Array.isArray(node.tracks.items) && node.tracks.items);
+
+    if (items && items.some(looksLikeTrackItem)) {
+      const next =
+        (typeof node.next === "string" && node.next) ||
+        (isRecord(node.tracks) && typeof node.tracks.next === "string" && node.tracks.next) ||
+        (isRecord(node.trackList) && typeof node.trackList.next === "string" && node.trackList.next) ||
+        null;
+      const total =
+        (typeof node.total === "number" && node.total) ||
+        (typeof node.trackCount === "number" && node.trackCount) ||
+        (isRecord(node.tracks) && typeof node.tracks.total === "number" && node.tracks.total) ||
+        undefined;
+      return { items, next, total };
     }
 
-    const clientIdEnv = process.env.SPOTIFY_CLIENT_ID;
-    const clientSecretEnv = process.env.SPOTIFY_CLIENT_SECRET;
-    if (clientIdEnv && clientSecretEnv) {
-        const body = new URLSearchParams({ grant_type: "client_credentials" }).toString();
-        const auth = Buffer.from(`${clientIdEnv}:${clientSecretEnv}`).toString("base64");
-        const response = await axios.post<SpotifyClientCredentialsResponse>("https://accounts.spotify.com/api/token", body, {
-            timeout: 10_000,
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                Authorization: `Basic ${auth}`,
-                Accept: "application/json",
-            },
-        });
-
-        cachedSpotifyToken = {
-            accessToken: response.data.access_token,
-            clientId: clientIdEnv,
-            expiresAtMs: now + Math.max(1, response.data.expires_in) * 1000,
-        };
-
-        return {
-            accessToken: response.data.access_token,
-            clientId: clientIdEnv,
-        };
+    for (const value of Object.values(node)) {
+      if (isRecord(value) || Array.isArray(value)) queue.push(value);
     }
-
-    const totp = generateTOTP(SPOTIFY_TOTP_SECRET);
-    const url = `https://open.spotify.com/api/token?reason=init&productType=web-player&totp=${totp}&totpVer=61&totpServer=${totp}`;
-    
-    const response = await axios.get<SpotifyTokenResponse>(url, {
-        timeout: 10_000,
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
-            'Accept': 'application/json'
-        }
-    });
-
-    cachedSpotifyToken = {
-        accessToken: response.data.accessToken,
-        clientId: response.data.clientId,
-        expiresAtMs: typeof response.data.accessTokenExpirationTimestampMs === "number"
-            ? response.data.accessTokenExpirationTimestampMs
-            : now + 30 * 60_000,
-    };
-
-    return {
-        accessToken: response.data.accessToken,
-        clientId: response.data.clientId
-    };
+  }
+  return null;
 }
 
-export async function getSpotifyTrack(id: string) {
-    const { accessToken } = await getSpotifyToken();
-    const url = `https://api.spotify.com/v1/tracks/${id}`;
-    
-    const response = await axios.get<SpotifyTrack>(url, {
-        timeout: 10_000,
-        headers: {
-            'Authorization': `Bearer ${accessToken}`
-        }
-    });
-
-    const track = response.data;
-    return {
-        id: track.id,
-        title: track.name,
-        artists: track.artists.map((a) => a.name).join(', '),
-        album: track.album.name,
-        image: track.album.images[0]?.url ?? "",
-        duration: Math.floor(track.duration_ms / 1000),
-        isExplicit: track.explicit,
-        url: track.external_urls.spotify,
-        source: 'spotify'
-    };
+async function fetchHtml(url: string) {
+  const response = await axios.get(url, {
+    timeout: 12_000,
+    headers: { "User-Agent": USER_AGENT, "Accept-Language": "en-US,en;q=0.9" },
+  });
+  return response.data as string;
 }
 
-export async function searchSpotify(query: string) {
+async function fetchJson(url: string) {
+  const response = await axios.get(url, {
+    timeout: 12_000,
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "application/json",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+  });
+  return response.data as unknown;
+}
+
+function normalizeNextUrl(nextUrl: string, origin: string) {
+  if (nextUrl.startsWith("http://") || nextUrl.startsWith("https://")) return nextUrl;
+  if (nextUrl.startsWith("/")) return `${origin}${nextUrl}`;
+  return `${origin}/${nextUrl}`;
+}
+
+async function fetchNextDataFromUrl(url: string): Promise<Record<string, unknown> | null> {
+  try {
+    const html = await fetchHtml(url);
+    return parseNextData(html);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchPlaylistData(playlistId: string): Promise<{ data: Record<string, unknown>; origin: string } | null> {
+  const origin = "https://open.spotify.com";
+  const htmlUrls = [
+    `${origin}/playlist/${playlistId}`,
+    `${origin}/embed/playlist/${playlistId}`,
+  ];
+
+  for (const url of htmlUrls) {
+    const data = await fetchNextDataFromUrl(url);
+    if (data) return { data, origin };
+  }
+
+  const jsonUrls = [
+    `${origin}/playlist/${playlistId}?__a=1&__d=dis`,
+    `${origin}/playlist/${playlistId}?__a=1`,
+  ];
+
+  for (const url of jsonUrls) {
     try {
-        const { accessToken } = await getSpotifyToken();
-        const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=10`;
-        
-        const response = await axios.get<SpotifySearchResponse>(url, {
-            timeout: 10_000,
-            headers: {
-                'Authorization': `Bearer ${accessToken}`
-            }
-        });
-
-        return response.data.tracks.items.map((track) => ({
-            id: track.id,
-            title: track.name,
-            subtitle: track.artists.map((a) => a.name).join(', '),
-            image: track.album.images[0]?.url ?? "",
-            source: 'spotify'
-        }));
-    } catch (error) {
-        console.error('Spotify search failed:', error);
-        return [];
+      const json = await fetchJson(url);
+      if (isRecord(json)) return { data: json as Record<string, unknown>, origin };
+    } catch {
+      // continue
     }
+  }
+
+  return null;
 }
 
-export async function getSpotifyPlaylist(playlistId: string, options?: { maxTracks?: number }) {
-    const { accessToken } = await getSpotifyToken();
-    const maxTracks = Math.max(1, Math.min(2000, options?.maxTracks ?? 1000));
+export async function scrapeSpotifyPlaylist(playlistId: string): Promise<ScrapedPlaylist | null> {
+  const cached = scrapeCache.get(playlistId);
+  if (cached) return cached;
 
-    const metaUrl = `https://api.spotify.com/v1/playlists/${playlistId}?fields=id,name,description,images,owner(display_name),tracks(total)`;
+  const source = await fetchPlaylistData(playlistId);
+  if (!source) return null;
+  const { data, origin } = source;
 
-    let data: SpotifyPlaylistMetaResponse;
-    try {
-        const response = await axios.get<SpotifyPlaylistMetaResponse>(metaUrl, {
-            timeout: 10_000,
-            headers: {
-                'Authorization': `Bearer ${accessToken}`
-            }
-        });
-        data = response.data;
-    } catch (error) {
-        if (axios.isAxiosError(error) && error.response?.status === 404) return null;
-        throw error;
+  const playlistEntity = findPlaylistEntity(data, playlistId);
+  const playlistImage = upgradeSpotifyImageUrl(
+    extractImageFromRecord(playlistEntity) || extractImageFromRecord(data)
+  );
+  const title =
+    (playlistEntity && typeof playlistEntity.name === "string" && playlistEntity.name) ||
+    (playlistEntity && typeof playlistEntity.title === "string" && playlistEntity.title) ||
+    "Spotify Playlist";
+  const description =
+    (playlistEntity && typeof playlistEntity.description === "string" && playlistEntity.description) ||
+    (playlistEntity && typeof playlistEntity.subtitle === "string" && playlistEntity.subtitle) ||
+    "";
+  const owner =
+    (playlistEntity &&
+      isRecord(playlistEntity.owner) &&
+      typeof playlistEntity.owner.display_name === "string" &&
+      playlistEntity.owner.display_name) ||
+    (playlistEntity &&
+      isRecord(playlistEntity.owner) &&
+      typeof playlistEntity.owner.name === "string" &&
+      playlistEntity.owner.name) ||
+    "Spotify";
+
+  const initialContainer = extractTrackContainer(playlistEntity) ?? extractTrackContainer(data);
+  if (!initialContainer) return null;
+
+  const tracks: ScrapedTrack[] = [];
+  const seen = new Set<string>();
+
+  const addTracks = (items: unknown[]) => {
+    for (const item of items) {
+      const raw = unwrapTrack(item);
+      if (!raw) continue;
+      const id = extractTrackId(raw);
+      const title = extractTitle(raw);
+      if (!id || !title) continue;
+      const artists = extractArtists(raw);
+      if (!artists) continue;
+      const key = trackKey(title, artists);
+      const image = upgradeSpotifyImageUrl(extractTrackImage(raw, playlistImage));
+      const album = extractAlbum(raw);
+      const duration = extractDuration(raw);
+
+      if (seen.has(key)) {
+        const existing = tracks.find((t) => trackKey(t.title, t.artists) === key);
+        if (existing) {
+          const existingScore = imageScore(existing.image);
+          const nextScore = imageScore(image);
+          if (nextScore > existingScore) {
+            existing.image = image;
+            existing.thumbnail = image;
+          }
+          if (!existing.album && album) existing.album = album;
+          if (!existing.duration && duration) existing.duration = duration;
+          if (!existing.id) existing.id = id;
+        }
+        continue;
+      }
+
+      seen.add(key);
+
+      tracks.push({
+        id,
+        title,
+        subtitle: artists,
+        artists,
+        album,
+        duration,
+        image,
+        thumbnail: image,
+        source: "spotify_playlist",
+      });
     }
+  };
 
-    const total = typeof data.tracks?.total === "number" ? data.tracks.total : 0;
+  addTracks(initialContainer.items);
 
-    const tracks: Array<{ id: string; title: string; subtitle: string; image: string; source: "spotify" }> = [];
-    const pageSize = 100;
-    let offset = 0;
+  let nextUrl = initialContainer.next;
+  let guard = 0;
+  while (nextUrl && guard < 50) {
+    guard += 1;
+    const normalizedNext = normalizeNextUrl(nextUrl, origin);
+    if (normalizedNext.includes("api.spotify.com")) {
+      break;
+    }
+    const pageJson = await fetchJson(normalizedNext);
+    const nextContainer = extractTrackContainer(pageJson);
+    if (!nextContainer) break;
+    addTracks(nextContainer.items);
+    nextUrl = nextContainer.next;
+  }
 
-    while (offset < total && tracks.length < maxTracks) {
-        const remaining = maxTracks - tracks.length;
-        const limit = Math.max(1, Math.min(pageSize, remaining));
-        const pageUrl = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}&fields=items(track(id,name,artists(name),album(name,images(url)))),next,total,offset,limit`;
+  const fillMissingCovers = async () => {
+    const missing = tracks.filter(
+      (track) => !track.image || track.image === playlistImage || isLowResImage(track.image)
+    );
+    if (missing.length === 0) return;
 
-        let page: SpotifyPlaylistTracksPageResponse;
-        try {
-            const response = await axios.get<SpotifyPlaylistTracksPageResponse>(pageUrl, {
-                timeout: 10_000,
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`
-                }
-            });
-            page = response.data;
-        } catch (error) {
-            if (axios.isAxiosError(error) && error.response?.status === 404) return null;
-            throw error;
+    const queue = [...missing];
+    const workerCount = Math.min(6, queue.length);
+
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (queue.length > 0) {
+        const track = queue.shift();
+        if (!track) break;
+        const key = trackKey(track.title, track.artists);
+        const cached = coverCache.get(key);
+        if (cached) {
+          track.image = cached;
+          track.thumbnail = cached;
+          continue;
         }
 
-        for (const item of page.items ?? []) {
-            const track = item.track;
-            if (!track?.id) continue;
-            tracks.push({
-                id: track.id,
-                title: track.name,
-                subtitle: track.artists.map((a) => a.name).join(', '),
-                image: track.album.images[0]?.url ?? "",
-                source: 'spotify'
-            });
-        }
-
-        offset += page.limit || limit;
-        if (!page.next) break;
-    }
-
-    return {
-        id: data.id,
-        title: data.name,
-        description: data.description,
-        image: data.images[0]?.url ?? "",
-        owner: data.owner.display_name,
-        total,
-        tracks,
-        truncated: tracks.length < total,
-    };
-}
-
-const trackMetaCache = new MemoryCache<any>({ maxEntries: 5000, ttlMs: 48 * 60 * 60_000 }); // 48 hour deep cache
-
-export async function getSpotifyTracks(ids: string[]) {
-    if (ids.length === 0) return [];
-    
-    const results: any[] = [];
-    const missingIds: string[] = [];
-    
-    for (const id of ids) {
-        const cached = trackMetaCache.get(id);
-        if (cached) results.push(cached);
-        else missingIds.push(id);
-    }
-    
-    if (missingIds.length === 0) return results;
-
-    const { accessToken } = await getSpotifyToken().catch(() => ({ accessToken: null }));
-    if (!accessToken) return results;
-    
-    // Batch missing in 50s
-    const chunks = [];
-    for (let i = 0; i < missingIds.length; i += 50) {
-        chunks.push(missingIds.slice(i, i + 50));
-    }
-
-    const fetchedTracks: any[] = [];
-    for (const chunk of chunks) {
         try {
-            const url = `https://api.spotify.com/v1/tracks?ids=${chunk.join(',')}`;
-            const response = await axios.get(url, {
-                timeout: 8000,
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            const tracks = response.data.tracks.filter((t: any) => t !== null).map((track: any) => {
-                const meta = {
-                    id: track.id,
-                    title: track.name,
-                    subtitle: track.artists.map((a: any) => a.name).join(', '),
-                    image: track.album.images[0]?.url || track.album.images[1]?.url || "",
-                    source: 'spotify'
-                };
-                trackMetaCache.set(track.id, meta);
-                return meta;
-            });
-            fetchedTracks.push(...tracks);
+          const results = await searchJioSaavn(`${track.title} ${track.artists}`.trim());
+          const image = results?.[0]?.image ?? "";
+          if (image) {
+            coverCache.set(key, image);
+            track.image = image;
+            track.thumbnail = image;
+          }
         } catch (e) {
-            console.warn("Spotify batch chunk failed, will rely on individual fallbacks.");
+          // Keep playlist image as fallback
         }
-    }
-    return [...results, ...fetchedTracks];
-}
-
-export async function scrapeSpotifyPlaylist(playlistId: string) {
-    const url = `https://open.spotify.com/embed/playlist/${playlistId}`;
-    const response = await axios.get(url, {
-        timeout: 12_000,
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
-        }
+      }
     });
 
-    const html = response.data;
-    const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
-    if (!match) return null;
+    await Promise.all(workers);
+  };
 
-    try {
-        const data = JSON.parse(match[1]);
-        const entity = data.props.pageProps.state.data.entity;
-        const playlistImage = entity.coverArt?.sources?.[0]?.url ?? "";
-        
-        const trackList = entity.trackList || [];
-        const trackIds = trackList.map((item: any) => item.uri.split(':').pop());
+  await fillMissingCovers();
 
-        // NO LIMIT: Fetch metadata for ALL tracks in batches
-        // This ensures a 500 track playlist gets 500 unique images
-        const boostedMetadata = await getSpotifyTracks(trackIds).catch(() => []);
-        const metadataMap = new Map(boostedMetadata.map((t: any) => [t.id, t]));
+  const total =
+    (playlistEntity &&
+      typeof playlistEntity.total === "number" &&
+      playlistEntity.total) ||
+    (playlistEntity &&
+      typeof playlistEntity.trackCount === "number" &&
+      playlistEntity.trackCount) ||
+    (playlistEntity &&
+      isRecord(playlistEntity.tracks) &&
+      typeof playlistEntity.tracks.total === "number" &&
+      playlistEntity.tracks.total) ||
+    (initialContainer.total ?? tracks.length);
 
-        const tracks = await Promise.all(trackList.map(async (item: any, index: number) => {
-            const trackId = item.uri.split(':').pop();
-            const boosted = metadataMap.get(trackId);
-            
-            let finalImage = boosted?.image || playlistImage;
+  const result: ScrapedPlaylist = {
+    id: playlistId,
+    title,
+    description,
+    image: playlistImage,
+    owner,
+    total,
+    tracks,
+    truncated: tracks.length < total,
+    scraped: true,
+  };
 
-            // SMART FALLBACK: If API failed and we have no unique image, use search-based discovery
-            // We prioritize the first 50 tracks for deep search, then skip for performance unless requested
-            if (finalImage === playlistImage && index < 50) {
-                try {
-                    const { searchJioSaavn } = await import("./jiosaavn");
-                    const searchRes = await searchJioSaavn(`${item.title} ${item.subtitle}`);
-                    if (searchRes?.[0]?.image) {
-                        finalImage = searchRes[0].image;
-                        trackMetaCache.set(trackId, { 
-                            id: trackId, 
-                            title: item.title, 
-                            subtitle: item.subtitle, 
-                            image: finalImage, 
-                            source: 'spotify' 
-                        });
-                    }
-                } catch (e) {}
-            }
-
-            return {
-                id: trackId,
-                title: boosted?.title || item.title,
-                subtitle: boosted?.subtitle || item.subtitle,
-                image: finalImage,
-                source: 'spotify'
-            };
-        }));
-
-        return {
-            id: entity.id,
-            title: entity.title,
-            description: entity.subtitle,
-            image: playlistImage,
-            owner: entity.authors?.[0]?.name ?? "Spotify",
-            total: trackList.length,
-            tracks,
-            truncated: false,
-            scraped: true
-        };
-    } catch (e) {
-        console.error("Scraper failed to parse JSON:", e);
-        return null;
-    }
-}
-
-
-
-
-export async function getSpotifyPlaylistHybrid(playlistId: string, options?: { maxTracks?: number }) {
-    // 1. Always try scraper first (Fastest, zero rate limit risk)
-    let playlist: any = await scrapeSpotifyPlaylist(playlistId).catch(() => null);
-    
-    const limit = options?.maxTracks ?? 1000;
-    const currentCount = playlist?.tracks?.length ?? 0;
-    const totalCount = playlist?.total ?? 0;
-
-    // 2. If scraper is missing tracks and we want more than just the first batch, use API booster
-    if (!playlist || (totalCount > currentCount && limit > currentCount)) {
-        try {
-            const apiData = await getSpotifyPlaylist(playlistId, options);
-            if (apiData) {
-                // If we already had scraper data, merge them to keep unique images from scraper if API fails metadata
-                if (playlist) {
-                    playlist = {
-                        ...apiData,
-                        tracks: apiData.tracks.map((t: any) => {
-                            const scraped = playlist.tracks.find((st: any) => st.id === t.id);
-                            return scraped ? { ...t, image: scraped.image || t.image } : t;
-                        })
-                    };
-                } else {
-                    playlist = apiData;
-                }
-            }
-        } catch (e) {
-            console.warn("Spotify API booster failed, staying with scraper/null.");
-        }
-    }
-
-    return playlist;
+  scrapeCache.set(playlistId, result);
+  return result;
 }

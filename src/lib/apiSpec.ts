@@ -1,6 +1,6 @@
 export const API_VERSION = "1.2.0" as const;
 
-export const API_FEATURES = ["Unified Search", "Trending Charts", "Spotify Playlist Clone", "Song Stream Resolver", "Spotify Bulk Downloader"] as const;
+export const API_FEATURES = ["JioSaavn Search", "Trending Charts", "Spotify Playlist Scraper", "Song Stream Resolver", "Spotify Bulk Downloader"] as const;
 
 export const API_ENDPOINTS = [
   {
@@ -17,7 +17,7 @@ export const API_ENDPOINTS = [
     path: "/api/search",
     method: "GET",
     params: ["q", "limit?", "source?"],
-    description: "Search tracks (Spotify + JioSaavn).",
+    description: "Search tracks (JioSaavn only; source accepted for compatibility).",
   },
   {
     path: "/api/trending",
@@ -35,13 +35,18 @@ export const API_ENDPOINTS = [
     path: "/api/playlist",
     method: "GET",
     params: ["id", "limit?"],
-    description: "Fetch a Spotify playlist and its tracks (paged).",
+    description: "Fetch a Spotify playlist via scraper.",
   },
   {
     path: "/api/spotify-download/[id]",
     method: "GET",
     params: ["id (Playlist ID)"],
     description: "Fetch a Spotify playlist with direct download links. Path-based version avoids terminal parse errors.",
+  },
+  {
+    path: "/api/random",
+    method: "GET",
+    description: "Returns a random ready-to-play song (JioSaavn). Great for shuffle/discovery.",
   },
   {
     path: "/api/song",

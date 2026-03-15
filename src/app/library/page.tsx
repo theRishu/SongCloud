@@ -1,47 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Image from "next/image";
 import { Download, Menu, Trash2 } from "lucide-react";
-import Sidebar from "@/components/Sidebar";
-import Player from "@/components/Player";
+import AppShell from "@/components/AppShell";
 import { useMusic } from "@/context/MusicContext";
-import shell from "../page.module.css";
 import styles from "./page.module.css";
 
 export default function LibraryPage() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  const openSidebar = useCallback(() => setIsSidebarOpen(true), []);
-  const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
-
-  useEffect(() => {
-    if (!isSidebarOpen) return;
-    if (typeof window === "undefined") return;
-    if (!window.matchMedia("(max-width: 900px)").matches) return;
-
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [isSidebarOpen]);
-
-  const { history, playSong, downloadSong, clearHistory } = useMusic();
+  const { history, playQueue, downloadSong, clearHistory } = useMusic();
 
   const hasHistory = history.length > 0;
   const title = useMemo(() => `Recently played (${history.length})`, [history.length]);
 
   return (
-    <main className={shell.root}>
-      <div className={shell.background} aria-hidden="true">
-        <div className={shell.blobOne} />
-        <div className={shell.blobTwo} />
-      </div>
-
-      <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
-
-      <div className={shell.content}>
+    <AppShell>
+      {({ openSidebar }) => (
         <div className={styles.root}>
           <header className={styles.header}>
             <button type="button" className={styles.menuButton} onClick={openSidebar} aria-label="Open menu">
@@ -73,19 +47,19 @@ export default function LibraryPage() {
 
             {hasHistory ? (
               <div className={styles.list}>
-                {history.map((song) => (
+                {history.map((song, index) => (
                   <div
                     key={song.id}
                     className={styles.row}
                     role="button"
                     tabIndex={0}
-                    onClick={() => playSong(song)}
+                    onClick={() => playQueue(history, index)}
                     title="Play"
                     aria-label={`Play ${song.title}`}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        playSong(song);
+                        playQueue(history, index);
                       }
                     }}
                   >
@@ -124,9 +98,7 @@ export default function LibraryPage() {
             )}
           </section>
         </div>
-      </div>
-
-      <Player />
-    </main>
+      )}
+    </AppShell>
   );
 }

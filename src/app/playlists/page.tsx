@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Menu, PlusCircle, Trash2, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Sidebar from "@/components/Sidebar";
-import Player from "@/components/Player";
+import AppShell from "@/components/AppShell";
 import { useMusic } from "@/context/MusicContext";
-import shell from "../page.module.css";
 import styles from "./page.module.css";
 
 type PlaylistApiTrack = {
@@ -41,23 +39,7 @@ function toSong(track: PlaylistApiTrack) {
 
 export default function PlaylistsPage() {
   const router = useRouter();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-
-  const openSidebar = useCallback(() => setIsSidebarOpen(true), []);
-  const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
-
-  useEffect(() => {
-    if (!isSidebarOpen) return;
-    if (typeof window === "undefined") return;
-    if (!window.matchMedia("(max-width: 900px)").matches) return;
-
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [isSidebarOpen]);
 
   const { playlists, createPlaylist, deletePlaylist, addManyToPlaylist } = useMusic();
 
@@ -112,15 +94,8 @@ export default function PlaylistsPage() {
   };
 
   return (
-    <main className={shell.root}>
-      <div className={shell.background} aria-hidden="true">
-        <div className={shell.blobOne} />
-        <div className={shell.blobTwo} />
-      </div>
-
-      <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
-
-      <div className={shell.content}>
+    <AppShell>
+      {({ openSidebar }) => (
         <div className={styles.root}>
           <header className={styles.header}>
             <button type="button" className={styles.menuButton} onClick={openSidebar} aria-label="Open menu">
@@ -184,9 +159,7 @@ export default function PlaylistsPage() {
             )}
           </section>
         </div>
-      </div>
-
-      <Player />
-    </main>
+      )}
+    </AppShell>
   );
 }

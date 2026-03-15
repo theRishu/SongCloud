@@ -109,7 +109,8 @@
 }
 
 .row:hover {
-  border-color: rgba(124, 58, 237, 0.22);
+  border-color: rgba(29, 185, 84, 0.22);
+  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
 }
 
 .rowLink {
@@ -155,6 +156,7 @@
 .iconButton:hover {
   color: var(--foreground);
   background: rgba(0, 0, 0, 0.06);
+  background: color-mix(in srgb, var(--card) 82%, var(--foreground) 6%);
 }
 
 .empty {
@@ -181,4 +183,3 @@
     padding: 10px 14px 28px;
   }
 }
-

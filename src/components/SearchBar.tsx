@@ -122,7 +122,7 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
   const [songToAdd, setSongToAdd] = useState<SearchResult | null>(null);
   const [newPlaylistName, setNewPlaylistName] = useState("");
 
-  const { playSong, downloadSong, playlists, createPlaylist, addToPlaylist, addManyToPlaylist, toggleLike, isLiked } =
+  const { playQueue, downloadSong, playlists, createPlaylist, addToPlaylist, addManyToPlaylist, toggleLike, isLiked } =
     useMusic();
 
   const urlQuery = searchParams.get("q") || "";
@@ -138,6 +138,7 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
   }, [toast]);
 
   const playlistOptions = useMemo(() => playlists, [playlists]);
+  const resultSongs = useMemo(() => results.map(toSong), [results]);
 
   useEffect(() => {
     if (importMode !== "existing") return;
@@ -351,9 +352,40 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
   };
 
   const playPlaylist = async (item: TrendingItem) => {
-    // In a real app, we'd fetch the playlist songs. 
-    // For now, we search for the title to show songs.
     setQuery(item.title);
+
+    const cached = chartCache.get(item.id);
+    if (cached && cached.length > 0) {
+      setResults(cached);
+      playQueue(cached.map(toSong), 0);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const res = await fetch(`/api/chart?id=${encodeURIComponent(item.id)}&limit=50`);
+      const data: unknown = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        const message = getErrorMessage(data) ?? `Chart fetch failed (${res.status})`;
+        showToast(message, "error");
+        return;
+      }
+
+      const obj = data as Record<string, unknown> | null;
+      const tracksRaw = obj?.tracks;
+      if (!Array.isArray(tracksRaw)) return;
+
+      const parsed = tracksRaw.filter(isSearchResult);
+      chartCache.set(item.id, parsed);
+      setResults(parsed);
+      playQueue(parsed.map(toSong), 0);
+    } catch (error) {
+      console.error("Chart fetch failed:", error);
+      showToast("Chart fetch failed", "error");
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const importSpotifyPlaylist = useCallback(async () => {
@@ -675,21 +707,21 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
             <button
               type="button"
               onClick={() => setIsImportOpen(true)}
-              className={`${styles.menuButton} ${styles.cloneButton}`}
+              className={`${styles.menuButton} ${styles.quickButton} ${styles.quickButtonImport}`}
               title="Import Spotify playlist"
               aria-label="Import Spotify playlist"
             >
-              <PlusCircle size={22} color="#a78bfa" />
+              <PlusCircle size={22} />
             </button>
 
             <button
               type="button"
               onClick={() => router.push("/spotify-download")}
-              className={`${styles.menuButton} ${styles.cloneButton}`}
+              className={`${styles.menuButton} ${styles.quickButton} ${styles.quickButtonDownload}`}
               title="Spotify Downloader"
               aria-label="Spotify Downloader"
             >
-              <DownloadCloud size={22} color="#10b981" />
+              <DownloadCloud size={22} />
             </button>
           </div>
         </div>
@@ -782,7 +814,7 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
                 ) : (
                   <div className={styles.grid}>
                     {results.map((result, idx) => {
-                      const song = toSong(result);
+                      const song = resultSongs[idx] ?? toSong(result);
                       const liked = isLiked(song);
 
                       return (
@@ -794,11 +826,11 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
                         className={styles.card}
                         role="button"
                         tabIndex={0}
-                        onClick={() => playSong(song)}
+                        onClick={() => playQueue(resultSongs, idx)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            playSong(song);
+                            playQueue(resultSongs, idx);
                           }
                         }}
                       >
@@ -816,7 +848,7 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
                               className={`${styles.actionButton} ${styles.playAction}`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                playSong(song);
+                                playQueue(resultSongs, idx);
                               }}
                               aria-label="Play"
                             >

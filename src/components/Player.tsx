@@ -2,7 +2,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Maximize2, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Volume2 } from "lucide-react";
+import { Maximize2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume2 } from "lucide-react";
 import Image from "next/image";
 import React from "react";
 import { useMusic } from "@/context/MusicContext";
@@ -21,7 +21,23 @@ function formatTime(totalSeconds: number) {
 
 export default function Player() {
   const shouldReduceMotion = useReducedMotion();
-  const { currentSong, isPlaying, togglePlay, currentTime, duration, seekTo, volume, setVolume } = useMusic();
+  const {
+    currentSong,
+    isPlaying,
+    togglePlay,
+    currentTime,
+    duration,
+    seekTo,
+    volume,
+    setVolume,
+    queue,
+    nextTrack,
+    previousTrack,
+    isShuffle,
+    toggleShuffle,
+    repeatMode,
+    cycleRepeat,
+  } = useMusic();
   const progressBarRef = React.useRef<HTMLDivElement | null>(null);
   const isSeekingRef = React.useRef(false);
 
@@ -57,8 +73,8 @@ export default function Player() {
     >
       <div className={styles.songInfo}>
         <motion.div
-          animate={shouldReduceMotion ? undefined : { rotate: isPlaying ? 360 : 0 }}
-          transition={shouldReduceMotion ? undefined : { duration: 10, repeat: Infinity, ease: "linear" }}
+          animate={shouldReduceMotion ? undefined : { scale: isPlaying ? 1.03 : 1 }}
+          transition={shouldReduceMotion ? undefined : { duration: 0.35, ease: "easeOut" }}
           className={styles.cover}
         >
           <Image
@@ -81,20 +97,52 @@ export default function Player() {
 
       <div className={styles.controls}>
         <div className={styles.controlRow} aria-label="Controls">
-          <button type="button" className={`${styles.iconButton} ${styles.secondaryControl}`} aria-label="Shuffle">
+          <button
+            type="button"
+            className={`${styles.iconButton} ${styles.secondaryControl} ${isShuffle ? styles.activeControl : ""}`}
+            aria-label="Shuffle"
+            aria-pressed={isShuffle}
+            onClick={toggleShuffle}
+            title={isShuffle ? "Shuffle on" : "Shuffle off"}
+          >
             <Shuffle size={18} />
           </button>
-          <button type="button" className={`${styles.iconButton} ${styles.secondaryControl}`} aria-label="Previous">
+          <button
+            type="button"
+            className={`${styles.iconButton} ${styles.secondaryControl}`}
+            aria-label="Previous"
+            onClick={previousTrack}
+            disabled={queue.length <= 1}
+            aria-disabled={queue.length <= 1}
+            title={queue.length <= 1 ? "No previous track" : "Previous"}
+          >
             <SkipBack size={22} />
           </button>
           <button type="button" onClick={togglePlay} className={styles.playButton} aria-label={isPlaying ? "Pause" : "Play"}>
             {isPlaying ? <Pause size={22} /> : <Play size={22} />}
           </button>
-          <button type="button" className={`${styles.iconButton} ${styles.secondaryControl}`} aria-label="Next">
+          <button
+            type="button"
+            className={`${styles.iconButton} ${styles.secondaryControl}`}
+            aria-label="Next"
+            onClick={nextTrack}
+            disabled={queue.length <= 1}
+            aria-disabled={queue.length <= 1}
+            title={queue.length <= 1 ? "No next track" : "Next"}
+          >
             <SkipForward size={22} />
           </button>
-          <button type="button" className={`${styles.iconButton} ${styles.secondaryControl}`} aria-label="Repeat">
-            <Repeat size={18} />
+          <button
+            type="button"
+            className={`${styles.iconButton} ${styles.secondaryControl} ${repeatMode !== "off" ? styles.activeControl : ""}`}
+            aria-label="Repeat"
+            aria-pressed={repeatMode !== "off"}
+            onClick={cycleRepeat}
+            title={
+              repeatMode === "one" ? "Repeat one" : repeatMode === "all" ? "Repeat all" : "Repeat off"
+            }
+          >
+            {repeatMode === "one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
           </button>
         </div>
 

@@ -55,7 +55,7 @@ function normalizeChartId(value: string) {
 }
 
 function normalizeImage(url: string) {
-  return url.replace("150x150", "500x500");
+  return url.replace(/50x50|150x150/g, "500x500");
 }
 
 export function OPTIONS(req: NextRequest) {

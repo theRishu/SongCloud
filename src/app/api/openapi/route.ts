@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
             title: { type: "string" },
             subtitle: { type: "string" },
             image: { type: "string" },
-            source: { type: "string", enum: ["spotify", "jio"] },
+            source: { type: "string", enum: ["jio", "spotify_playlist"] },
             url: { type: "string" },
           },
           required: ["id", "title", "image", "source"],
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
                 id: { type: "string" },
                 title: { type: "string" },
                 image: { type: "string" },
-                source: { type: "string", enum: ["spotify", "jio"] },
+                source: { type: "string" },
                 mediaUrl: { type: "string" },
                 duration: { type: "integer" },
                 quality: { type: "string" },
@@ -148,7 +148,8 @@ export async function GET(req: NextRequest) {
               name: "source",
               in: "query",
               required: false,
-              schema: { type: "string", enum: ["spotify", "jio", "all"] },
+              schema: { type: "string", enum: ["jio", "spotify", "all"] },
+              description: "JioSaavn-only search. spotify/all are treated as jio for compatibility.",
             },
           ],
           responses: {
@@ -213,7 +214,7 @@ export async function GET(req: NextRequest) {
           summary: "Resolve a stream URL",
           parameters: [
             { name: "id", in: "query", required: true, schema: { type: "string" } },
-            { name: "type", in: "query", required: false, schema: { type: "string", enum: ["spotify", "jio"] } },
+            { name: "type", in: "query", required: false, schema: { type: "string", enum: ["jio", "spotify", "spotify_playlist"] } },
           ],
           responses: {
             "200": { description: "Resolved", content: { "application/json": { schema: { $ref: "#/components/schemas/SongResponse" } } } },

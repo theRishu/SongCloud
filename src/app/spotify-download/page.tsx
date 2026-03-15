@@ -1,11 +1,9 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
-import Sidebar from "@/components/Sidebar";
-import Player from "@/components/Player";
-import styles from "../page.module.css";
+import { useMemo, useState } from "react";
+import AppShell from "@/components/AppShell";
 import dlStyles from "./SpotifyDownload.module.css";
-import { Copy, Download, Link as LinkIcon, Loader2, Music, Play, Terminal, X } from "lucide-react";
+import { Copy, Download, Link as LinkIcon, Loader2, Menu, Music, Play, Terminal, X } from "lucide-react";
 import { useMusic } from "@/context/MusicContext";
 import Image from "next/image";
 
@@ -30,7 +28,6 @@ type PlaylistData = {
 };
 
 export default function SpotifyDownloadPage() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [url, setUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [playlist, setPlaylist] = useState<PlaylistData | null>(null);
@@ -39,10 +36,21 @@ export default function SpotifyDownloadPage() {
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  const { downloadSong, playSong, createPlaylist, addManyToPlaylist } = useMusic();
+  const { downloadSong, playQueue, createPlaylist, addManyToPlaylist } = useMusic();
 
-  const openSidebar = useCallback(() => setIsSidebarOpen(true), []);
-  const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
+  const playlistSongs = useMemo(() => {
+    if (!playlist) return [];
+    return playlist.tracks.map((track) => ({
+      id: track.id,
+      title: track.title,
+      artists: track.subtitle,
+      image:
+        track.image ||
+        "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=120&h=120&fit=crop",
+      source: "spotify_playlist",
+      mediaUrl: track.streamUrl || track.downloadUrl,
+    }));
+  }, [playlist]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -83,7 +91,7 @@ export default function SpotifyDownloadPage() {
         title: track.title,
         artists: track.subtitle,
         image: track.image,
-        source: "spotify",
+        source: "spotify_playlist",
         mediaUrl: track.downloadUrl,
       });
     } finally {
@@ -119,7 +127,7 @@ export default function SpotifyDownloadPage() {
         title: track.title,
         artists: track.subtitle,
         image: track.image,
-        source: "spotify",
+        source: "spotify_playlist",
         mediaUrl: track.streamUrl || track.downloadUrl
     }));
 
@@ -135,19 +143,15 @@ export default function SpotifyDownloadPage() {
   };
 
   return (
-    <main className={styles.root}>
-      <div className={styles.background} aria-hidden="true">
-        <div className={styles.blobOne} />
-        <div className={styles.blobTwo} />
-      </div>
-
-      <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
-
-      <div className={styles.content}>
+    <AppShell>
+      {({ openSidebar }) => (
         <div className={dlStyles.container}>
             {toast && <div className={dlStyles.toast}>{toast}</div>}
 
             <header className={dlStyles.header}>
+                <button type="button" className={dlStyles.menuButton} onClick={openSidebar} aria-label="Open menu">
+                    <Menu size={20} />
+                </button>
                 <h1 className={dlStyles.title}>Spotify Playlist Downloader</h1>
                 <p className={dlStyles.subtitle}>High-speed bulk downloading. Get all tracks in one go.</p>
             </header>
@@ -234,14 +238,7 @@ export default function SpotifyDownloadPage() {
                                     />
                                     <button 
                                         className={dlStyles.itemPlayBtn}
-                                        onClick={() => playSong({
-                                            id: track.id,
-                                            title: track.title,
-                                            artists: track.subtitle,
-                                            image: track.image,
-                                            source: "spotify",
-                                            mediaUrl: track.streamUrl || track.downloadUrl,
-                                        })}
+                                        onClick={() => playQueue(playlistSongs, idx)}
                                     >
                                         <Play size={16} fill="white" />
                                     </button>
@@ -277,9 +274,7 @@ export default function SpotifyDownloadPage() {
                 </div>
             )}
         </div>
-      </div>
-
-      <Player />
-    </main>
+      )}
+    </AppShell>
   );
 }

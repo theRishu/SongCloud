@@ -1,447 +1,481 @@
 .container {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 2rem 1rem;
-    padding-top: 5rem;
-    position: relative;
+  height: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 22px 32px 28px;
+  overflow: auto;
 }
 
 .toast {
-    position: fixed;
-    top: 2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #10b981;
-    color: white;
-    padding: 0.75rem 1.5rem;
-    border-radius: 2rem;
-    font-weight: 600;
-    z-index: 1000;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-    animation: slideInDown 0.3s ease-out;
-}
-
-@keyframes slideInDown {
-    from { transform: translate(-50%, -20px); opacity: 0; }
-    to { transform: translate(-50%, 0); opacity: 1; }
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 220;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
 }
 
 .header {
-    text-align: center;
-    margin-bottom: 3rem;
+  position: relative;
+  text-align: center;
+  margin-bottom: 22px;
+  padding-top: 4px;
+}
+
+.menuButton {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  color: var(--foreground);
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.menuButton:hover {
+  background: var(--accent);
 }
 
 .title {
-    font-size: 2.8rem;
-    font-weight: 800;
-    margin-bottom: 0.5rem;
-    background: linear-gradient(135deg, #fff 0%, #a78bfa 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+  font-size: 36px;
+  font-weight: 900;
+  margin-bottom: 8px;
+  letter-spacing: -0.03em;
+  background: linear-gradient(
+    135deg,
+    var(--foreground) 0%,
+    color-mix(in srgb, var(--primary) 70%, #38bdf8 30%) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .subtitle {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 1.1rem;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .searchBox {
-    display: flex;
-    gap: 1rem;
-    background: rgba(255, 255, 255, 0.05);
-    padding: 1rem;
-    border-radius: 1.25rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(15px);
-    margin-bottom: 3rem;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  display: flex;
+  gap: 12px;
+  background: var(--glass-bg);
+  padding: 14px;
+  border-radius: 22px;
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  margin-bottom: 18px;
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.18);
 }
 
 .inputWrapper {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    background: rgba(0, 0, 0, 0.3);
-    padding: 0 1.25rem;
-    border-radius: 0.75rem;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--accent);
+  padding: 0 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
 }
 
 .icon {
-    color: rgba(255, 255, 255, 0.4);
+  color: var(--text-faint);
 }
 
 .input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    color: white;
-    padding: 1rem 0;
-    font-size: 1rem;
-    outline: none;
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--foreground);
+  padding: 14px 0;
+  font-size: 15px;
+  outline: none;
 }
 
 .clearBtn {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.4);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .clearBtn:hover {
-    color: white;
+  color: var(--foreground);
 }
 
 .fetchBtn {
-    background: #a78bfa;
-    color: black;
-    border: none;
-    padding: 0 2rem;
-    border-radius: 0.75rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 160px;
+  background: var(--primary);
+  color: #0b0b0f;
+  border: none;
+  padding: 0 18px;
+  border-radius: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
 }
 
 .fetchBtn:hover:not(:disabled) {
-    background: #c4b5fd;
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(167, 139, 250, 0.4);
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 34px var(--primary-glow);
 }
 
 .fetchBtn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .error {
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    color: #fca5a5;
-    padding: 1.25rem;
-    border-radius: 1rem;
-    margin-bottom: 2rem;
-    text-align: center;
-    backdrop-filter: blur(5px);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  color: rgb(252, 165, 165);
+  padding: 12px 14px;
+  border-radius: 18px;
+  margin-bottom: 18px;
 }
 
 .playlistInfo {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    margin-bottom: 2.5rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin: 10px 0 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
 }
 
 .playlistTitle {
-    font-size: 2.2rem;
-    font-weight: 800;
-    margin-bottom: 0.5rem;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  margin-bottom: 6px;
 }
 
 .playlistDesc {
-    color: rgba(255, 255, 255, 0.5);
-    margin-bottom: 1rem;
-    max-width: 600px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  max-width: 680px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .playlistStats {
-    display: flex;
-    gap: 1rem;
-    font-size: 0.95rem;
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .playlistCount {
-    color: #a78bfa;
-    font-weight: 700;
+  color: var(--primary);
+  font-weight: 900;
 }
 
 .playlistOwner {
-    color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
 }
 
 .batchActions {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .toolBtn {
-    background: rgba(255, 255, 255, 0.08);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 0.75rem 1.25rem;
-    border-radius: 2rem;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    transition: all 0.2s;
+  background: var(--accent);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 160ms ease, transform 160ms ease, border-color 160ms ease;
 }
 
 .toolBtn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.3);
+  background: color-mix(in srgb, var(--accent) 82%, var(--foreground) 6%);
+  border-color: color-mix(in srgb, var(--foreground) 14%, var(--border));
+  transform: translateY(-1px);
 }
 
 .cloneBtn {
-    background: rgba(167, 139, 250, 0.15);
-    color: #c4b5fd;
-    border: 1px solid rgba(167, 139, 250, 0.3);
-    padding: 0.85rem 1.75rem;
-    border-radius: 2.5rem;
-    font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    transition: all 0.3s;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 160ms ease, background 160ms ease;
 }
 
 .cloneBtn:hover {
-    background: rgba(167, 139, 250, 0.25);
-    transform: translateY(-2px);
-    border-color: rgba(167, 139, 250, 0.5);
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  transform: translateY(-1px);
 }
 
 .downloadAllBtn {
-    background: white;
-    color: black;
-    border: none;
-    padding: 0.85rem 2rem;
-    border-radius: 2.5rem;
-    font-weight: 800;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+  background: var(--primary);
+  color: #0b0b0f;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
 }
 
 .downloadAllBtn:hover:not(:disabled) {
-    transform: scale(1.05);
-    box-shadow: 0 15px 30px rgba(255,255,255,0.2);
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.26);
 }
 
 .downloadAllBtn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .trackList {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .trackItem {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.85rem 1.25rem;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 1rem;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--card);
+  border-radius: 18px;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+  border: 1px solid var(--border);
 }
 
 .trackItem:hover {
-    background: rgba(255, 255, 255, 0.07);
-    transform: translateX(5px);
-    border-color: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--card) 82%, var(--foreground) 6%);
+  transform: translateX(4px);
+  border-color: color-mix(in srgb, var(--foreground) 14%, var(--border));
 }
 
 .trackItemDownloading {
-    background: rgba(167, 139, 250, 0.1) !important;
-    border-color: rgba(167, 139, 250, 0.3) !important;
+  background: var(--primary-soft) !important;
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent) !important;
 }
 
 .trackRank {
-    width: 2rem;
-    color: rgba(255, 255, 255, 0.3);
-    font-weight: 700;
-    text-align: center;
+  width: 28px;
+  color: var(--text-faint);
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .trackArt {
-    position: relative;
-    width: 44px;
-    height: 44px;
-    border-radius: 0.4rem;
-    overflow: hidden;
-    flex-shrink: 0;
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--accent);
+  border: 1px solid var(--border);
 }
 
 .itemPlayBtn {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 0.2s;
-    border: none;
-    cursor: pointer;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+  border: none;
+  cursor: pointer;
 }
 
 .trackArt:hover .itemPlayBtn {
-    opacity: 1;
+  opacity: 1;
 }
 
 .trackDetails {
-    flex: 1;
-    min-width: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .trackName {
-    font-size: 1.05rem;
-    font-weight: 700;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-bottom: 0.1rem;
+  font-size: 14px;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
 }
 
 .trackArtists {
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.5);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.trackDownloadBtn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: white;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.trackDownloadBtn:hover:not(:disabled) {
-    background: #a78bfa;
-    color: black;
-    border-color: #a78bfa;
-    transform: scale(1.1);
-}
-
-.emptyState {
-    text-align: center;
-    padding: 6rem 2rem;
-    color: rgba(255, 255, 255, 0.3);
-}
-
-.emptyIcon {
-    margin-bottom: 2rem;
-    opacity: 0.15;
-    animation: pulse 3s infinite ease-in-out;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); opacity: 0.15; }
-    50% { transform: scale(1.1); opacity: 0.25; }
-    100% { transform: scale(1); opacity: 0.15; }
-}
-
-.trackImage {
-    object-fit: cover;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .trackActions {
-    margin-left: auto;
+  margin-left: auto;
+}
+
+.trackDownloadBtn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.trackDownloadBtn:hover:not(:disabled) {
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
+  transform: scale(1.04);
+}
+
+.emptyState {
+  text-align: center;
+  padding: 64px 20px;
+  color: var(--text-muted);
+}
+
+.emptyIcon {
+  margin-bottom: 18px;
+  opacity: 0.18;
+  animation: pulse 3s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.18;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.26;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.18;
+  }
+}
+
+.trackImage {
+  object-fit: cover;
 }
 
 .spin {
-    animation: spin 1s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-@media (max-width: 768px) {
-    .container {
-        padding-top: 4rem;
-        padding-bottom: 8rem; /* Space for player */
-    }
-    .title {
-        font-size: 1.8rem;
-    }
-    .subtitle {
-        font-size: 0.9rem;
-    }
-    .searchBox {
-        flex-direction: column;
-        padding: 0.75rem;
-    }
-    .fetchBtn {
-        width: 100%;
-        padding: 0.85rem;
-        min-width: 0;
-    }
-    .playlistInfo {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1.5rem;
-    }
-    .playlistTitle {
-        font-size: 1.6rem;
-    }
-    .batchActions {
-        width: 100%;
-        flex-direction: row;
-        flex-wrap: wrap;
-    }
-    .downloadAllBtn, .toolBtn {
-        flex: 1;
-        min-width: 140px;
-        justify-content: center;
-        padding: 0.75rem 1rem;
-        font-size: 0.9rem;
-    }
-    
-    .trackItem {
-        padding: 0.6rem 0.75rem;
-        gap: 0.75rem;
-    }
-    .trackRank {
-        width: 1.2rem;
-        font-size: 0.8rem;
-    }
-    .trackDetails {
-        flex: 1;
-    }
-    .trackName {
-        font-size: 0.95rem;
-    }
-    .trackArtists {
-        font-size: 0.8rem;
-    }
-    .trackDownloadBtn {
-        width: 36px;
-        height: 36px;
-    }
+@media (max-width: 900px) {
+  .container {
+    padding: 16px 16px 20px;
+  }
+
+  .menuButton {
+    display: inline-flex;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .searchBox {
+    flex-direction: column;
+  }
+
+  .fetchBtn {
+    width: 100%;
+    padding: 12px;
+    min-width: 0;
+  }
+
+  .playlistTitle {
+    font-size: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .fetchBtn,
+  .toolBtn,
+  .cloneBtn,
+  .downloadAllBtn,
+  .trackItem,
+  .trackDownloadBtn,
+  .itemPlayBtn {
+    transition: none;
+  }
+
+  .emptyIcon {
+    animation: none;
+  }
 }
