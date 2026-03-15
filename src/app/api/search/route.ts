@@ -27,7 +27,7 @@ function normalizeSource(value: string | null) {
 
 function parseLimit(value: string | null) {
   const parsed = value ? Number.parseInt(value, 10) : Number.NaN;
-  if (!Number.isFinite(parsed)) return 20;
+  if (!Number.isFinite(parsed)) return 7;
   return Math.min(50, Math.max(1, parsed));
 }
 
