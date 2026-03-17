@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
   if (query.length > 120) return errorResponse(req, "Query too long", 400);
 
   const lang = searchParams.get("lang")?.toLowerCase() || (isProbablyEnglish(query) ? "en" : "hi");
-  const limit = parseLimit(searchParams.get("limit") || "10");
+  const limit = parseLimit(searchParams.get("limit") || "20");
   
   const cacheKey = `${query.toLowerCase()}|${limit}|${lang}`;
 
@@ -87,12 +87,16 @@ export async function GET(req: NextRequest) {
     }
 
     // If we have few results or want to enrich with yt-dlp metadata as well
-    if (results.length < limit) {
-        const ytResults = await getYtDlpMetadata(query, limit - results.length);
+    // Let's ensure we get at least 20 results if possible
+    const targetLimit = Math.max(limit, 20);
+    if (results.length < targetLimit) {
+        // Differentiate YouTube search by language to avoid "same results" on different tabs
+        const ytQuery = lang === "en" ? `${query} song` : `${query} hindi song`;
+        const ytResults = await getYtDlpMetadata(ytQuery, targetLimit - results.length);
         results = [...results, ...ytResults];
     }
 
-    const sliced = results.slice(0, limit);
+    const sliced = results.slice(0, targetLimit);
     searchCache.set(cacheKey, sliced);
     return jsonResponse(req, sliced, { cacheSeconds: 30 });
   } catch (error: unknown) {

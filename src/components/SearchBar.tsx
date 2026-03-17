@@ -315,11 +315,15 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
         }
       }
 
-      const cached = searchCache.get(query);
+      const cacheKey = `${query}:${activeLang}`;
+      const cached = searchCache.get(cacheKey);
       if (cached) {
         setResults(cached);
+        setIsSearching(false);
         return;
       }
+
+      setIsSearching(true);
 
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&lang=${activeLang}`);
@@ -330,7 +334,7 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
         }
 
         const parsed = data.filter(isSearchResult);
-        searchCache.set(query, parsed);
+        searchCache.set(cacheKey, parsed);
         setResults(parsed);
       } catch (error) {
         console.error("Search failed:", error);

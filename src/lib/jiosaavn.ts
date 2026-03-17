@@ -61,8 +61,9 @@ export function formatString(str: string) {
 }
 
 export async function searchJioSaavn(query: string) {
-    const url = `https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query=${encodeURIComponent(query)}`;
-    const response = await axios.get<JioAutocompleteResponse>(url, {
+    // Using search.getResults for 30 results instead of autocomplete's few
+    const url = `https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&p=1&n=30&q=${encodeURIComponent(query)}`;
+    const response = await axios.get(url, {
         timeout: 10_000,
         headers: {
             "User-Agent":
@@ -72,17 +73,17 @@ export async function searchJioSaavn(query: string) {
     });
     const data = response.data;
     
-    const songs = data?.songs?.data;
+    const songs = data?.results;
     if (Array.isArray(songs)) {
         return songs.flatMap((song) => {
-            if (!song?.id || !song?.title || !song?.image) return [];
+            if (!song?.id || !song?.song || !song?.image) return [];
             return [
                 {
                     id: song.id,
-                    title: formatString(song.title),
-                    subtitle: formatString(song.subtitle ?? ''),
+                    title: formatString(song.song),
+                    subtitle: formatString(song.primary_artists ?? ''),
                     image: song.image.replace(/50x50|150x150/g, "500x500"),
-                    url: song.url,
+                    url: song.perma_url,
                     source: "jio",
                 }
             ];
