@@ -1,6 +1,6 @@
 export const API_VERSION = "1.2.0" as const;
 
-export const API_FEATURES = ["JioSaavn Search", "Trending Charts", "Spotify Playlist Scraper", "Song Stream Resolver", "Spotify Bulk Downloader"] as const;
+export const API_FEATURES = ["Multi-Source Search", "MusicBrainz Integration", "YouTube Metadata (yt-dlp)", "High-Fidelity Resolution", "Spotify Bulk Downloader"] as const;
 
 export const API_ENDPOINTS = [
   {
@@ -16,8 +16,8 @@ export const API_ENDPOINTS = [
   {
     path: "/api/search",
     method: "GET",
-    params: ["q", "limit?", "source?"],
-    description: "Search tracks (JioSaavn only; source accepted for compatibility).",
+    params: ["q", "limit?", "lang?"],
+    description: "Search tracks. Uses MusicBrainz for English, JioSaavn for Hindi, and yt-dlp for enrichment.",
   },
   {
     path: "/api/trending",

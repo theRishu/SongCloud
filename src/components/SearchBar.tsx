@@ -17,8 +17,9 @@ type SearchResult = {
   title: string;
   subtitle?: string;
   image: string;
-  source?: "spotify" | "jio";
+  source?: "spotify" | "jio" | "musicbrainz" | "youtube";
   url?: string;
+  mbid?: string;
 };
 
 type TrendingItem = {
@@ -56,7 +57,7 @@ function isSearchResult(value: unknown): value is SearchResult {
   if (!value || typeof value !== "object") return false;
   const obj = value as Record<string, unknown>;
   const source = obj.source;
-  const isSourceValid = source === "spotify" || source === "jio" || typeof source === "undefined";
+  const isSourceValid = ["spotify", "jio", "musicbrainz", "youtube"].includes(source as string) || typeof source === "undefined";
   return typeof obj.id === "string" && typeof obj.title === "string" && typeof obj.image === "string" && isSourceValid;
 }
 
@@ -77,7 +78,7 @@ function toSong(value: SearchResult | PlaylistApiTrack) {
     title: value.title,
     artists: value.subtitle,
     image: value.image,
-    source: (typeof value.source === "string" ? value.source : "jio") as "spotify" | "jio",
+    source: (typeof value.source === "string" ? value.source : "jio") as any,
     url: typeof value.url === "string" ? value.url : undefined,
   };
 }
@@ -171,6 +172,8 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeAddSong, closeImport, isImportOpen, songToAdd]);
+
+  const [activeLang, setActiveLang] = useState<"hi" | "en">("hi");
 
   useEffect(() => {
     if (urlQuery === query) return;
@@ -318,9 +321,8 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
         return;
       }
 
-      setIsSearching(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&lang=${activeLang}`);
         const data: unknown = await res.json();
         if (!Array.isArray(data)) {
           setResults([]);
@@ -339,7 +341,7 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
 
     const timeout = setTimeout(fetchResults, 300);
     return () => clearTimeout(timeout);
-  }, [query, searchParams, trending, showToast]);
+  }, [query, searchParams, trending, showToast, activeLang]);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -724,6 +726,22 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
               <DownloadCloud size={22} />
             </button>
           </div>
+          <div className={styles.tabsRow}>
+            <button 
+              type="button" 
+              className={`${styles.tab} ${activeLang === "hi" ? styles.tabActive : ""}`}
+              onClick={() => setActiveLang("hi")}
+            >
+              Hindi
+            </button>
+            <button 
+              type="button" 
+              className={`${styles.tab} ${activeLang === "en" ? styles.tabActive : ""}`}
+              onClick={() => setActiveLang("en")}
+            >
+              English
+            </button>
+          </div>
         </div>
       </header>
 
@@ -909,10 +927,14 @@ export default function SearchBar({ onOpenSidebar }: SearchBarProps) {
                           <div className={styles.cardSubtitle}>{result.subtitle}</div>
                           <span
                             className={`${styles.sourceBadge} ${
-                              result.source === "spotify" ? styles.sourceBadgeSpotify : ""
+                              result.source === "spotify" ? styles.sourceBadgeSpotify : 
+                              result.source === "musicbrainz" ? styles.sourceBadgeMB :
+                              result.source === "youtube" ? styles.sourceBadgeYT : ""
                             }`}
                           >
-                            {result.source === "spotify" ? "Spotify" : "Jio"}
+                            {result.source === "spotify" ? "Spotify" : 
+                             result.source === "musicbrainz" ? "English" :
+                             result.source === "youtube" ? "YouTube" : "Jio"}
                           </span>
                         </div>
                       </motion.div>

@@ -8,11 +8,15 @@ export const runtime = "nodejs";
 
 const songCache = new MemoryCache<Record<string, unknown>>({ maxEntries: 500, ttlMs: 30 * 60_000 });
 
+import { getBestAudioUrl } from "@/lib/ytdlp";
+
 function normalizeType(value: string | null) {
   const normalized = (value ?? "").trim().toLowerCase();
   if (!normalized) return "jio";
   if (normalized === "jio" || normalized === "saavn" || normalized === "jiosaavn") return "jio";
   if (normalized === "spotify" || normalized === "spotify_playlist" || normalized === "spotify-playlist") return "spotify_playlist";
+  if (normalized === "musicbrainz" || normalized === "mbid") return "musicbrainz";
+  if (normalized === "youtube" || normalized === "yt") return "youtube";
   return null;
 }
 
@@ -40,20 +44,20 @@ export async function GET(req: NextRequest) {
     let result: Record<string, unknown> = {};
     let status = 200;
 
-    if (type === "spotify_playlist") {
+    if (type === "spotify_playlist" || type === "musicbrainz") {
       const qTitle = searchParams.get("title");
       const qArtists = searchParams.get("artists") || searchParams.get("subtitle");
 
-      if (!qTitle || !qArtists) {
-        return errorResponse(req, "title and artists are required for spotify_playlist resolution", 400);
+      if (!qTitle) {
+        return errorResponse(req, "title is required for resolution", 400);
       }
 
-      const query = `${qTitle} ${qArtists}`.trim();
-
+      const query = `${qTitle} ${qArtists || ""}`.trim();
       const isLikelyPreview = (url: string | null) => !url || url.includes("p.scdn.co") || url.includes("mp3-preview");
 
       let resolved = false;
 
+      // Try JioSaavn first for potential high quality official streams
       try {
         const jioResults = await searchJioSaavn(query);
         if (jioResults.length > 0) {
@@ -68,26 +72,26 @@ export async function GET(req: NextRequest) {
               image: firstMatch.image,
               mediaUrl: firstMatch.mediaUrl,
               quality: firstMatch.quality || "320kbps",
-              source: "jio_full_stream_official",
+              source: "jio_resolved",
             };
           }
         }
-      } catch {
-        console.warn("JioSaavn resolution failed, trying Tidal fallback.");
-      }
+      } catch {}
 
+      // Fallback to yt-dlp if not resolved
       if (!resolved) {
-        const tidalId = await getTidalId(id).catch(() => null);
-        const tidalUrl = tidalId ? await getHighQualityStream(tidalId, "LOSSLESS").catch(() => null) : null;
-        if (tidalUrl && !isLikelyPreview(tidalUrl)) {
-          resolved = true;
-          result = {
-            title: qTitle,
-            artists: qArtists,
-            mediaUrl: tidalUrl,
-            quality: "FLAC",
-            source: "tidal_full_stream_official",
-          };
+        const ytData = await getBestAudioUrl(query);
+        if (ytData?.url) {
+            resolved = true;
+            result = {
+                title: qTitle || ytData.title,
+                artists: qArtists || ytData.uploader,
+                image: ytData.thumbnail,
+                mediaUrl: ytData.url,
+                duration: ytData.duration,
+                quality: "High",
+                source: "youtube_yt_dlp",
+            };
         }
       }
 
@@ -98,6 +102,17 @@ export async function GET(req: NextRequest) {
       } else {
         status = 404;
         result = { error: "No playable source found for this track." };
+      }
+    } else if (type === "youtube") {
+      const ytData = await getBestAudioUrl(id); // Use id as query or video id
+      if (!ytData) return errorResponse(req, "YouTube song not found", 404);
+      result = {
+          ...ytData,
+          mediaUrl: ytData.url,
+          source: "youtube_yt_dlp"
+      };
+      if (searchParams.get("redirect") === "true" && typeof result.mediaUrl === "string") {
+        return Response.redirect(result.mediaUrl, 302);
       }
     } else {
       // JioSaavn Direct Resolution

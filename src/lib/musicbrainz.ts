@@ -3,28 +3,31 @@ import axios from 'axios';
 
 const USER_AGENT = 'SongCloud/1.2.0 ( contact@example.com )';
 
-export async function searchMusicBrainz(title: string, artist: string) {
+export async function searchMusicBrainz(query: string, limit: number = 10) {
     try {
-        const query = `recording:"${title}" AND artist:"${artist}"`;
-        const url = `https://musicbrainz.org/ws/2/recording?query=${encodeURIComponent(query)}&fmt=json&limit=1`;
+        const url = `https://musicbrainz.org/ws/2/recording?query=${encodeURIComponent(query)}&fmt=json&limit=${limit}`;
         
         const response = await axios.get(url, {
             headers: { 'User-Agent': USER_AGENT }
         });
         
-        const recording = response.data.recordings?.[0];
-        if (!recording) return null;
-
-        return {
-            mbid: recording.id,
-            title: recording.title,
-            artist: recording['artist-credit']?.[0]?.name,
-            album: recording.releases?.[0]?.title,
-            releaseId: recording.releases?.[0]?.id,
-        };
+        const recordings = response.data.recordings || [];
+        
+        return recordings.map((recording: any) => {
+            const releaseId = recording.releases?.[0]?.id;
+            return {
+                id: recording.id,
+                title: recording.title,
+                artists: recording['artist-credit']?.[0]?.name || 'Unknown Artist',
+                album: recording.releases?.[0]?.title || 'Unknown Album',
+                releaseId: releaseId,
+                image: releaseId ? `https://coverartarchive.org/release/${releaseId}/front-500` : '',
+                source: 'musicbrainz'
+            };
+        });
     } catch (error) {
         console.error('MusicBrainz search failed:', error);
-        return null;
+        return [];
     }
 }
 
