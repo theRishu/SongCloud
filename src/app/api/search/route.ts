@@ -26,6 +26,24 @@ function normalizeSource(value: string | null) {
   return null;
 }
 
+function filterOfficialOnly(results: any[], query: string) {
+  const lowerQuery = query.toLowerCase();
+  const avoidWords = ["remix", "unplugged", "lofi", "slowed", "reverb", "cover", "8d", "mashup", "instrumental", "karaoke"];
+  
+  const allowedOverrides = avoidWords.filter(word => lowerQuery.includes(word));
+  
+  return results.filter(r => {
+    const textToCheck = `${r.title || ""} ${r.subtitle || r.artists || ""}`.toLowerCase();
+    for (const word of avoidWords) {
+       // If the track matches an avoid word, but the user DID NOT explicitly ask for it
+       if (!allowedOverrides.includes(word) && textToCheck.includes(word)) {
+           return false;
+       }
+    }
+    return true;
+  });
+}
+
 function parseLimit(value: string | null) {
   const parsed = value ? Number.parseInt(value, 10) : Number.NaN;
   if (!Number.isFinite(parsed)) return 7;
@@ -91,10 +109,13 @@ export async function GET(req: NextRequest) {
     const targetLimit = Math.max(limit, 20);
     if (results.length < targetLimit) {
         // Differentiate YouTube search by language to avoid "same results" on different tabs
-        const ytQuery = lang === "en" ? `${query} song` : `${query} hindi song`;
-        const ytResults = await getYtDlpMetadata(ytQuery, targetLimit - results.length);
+        const ytQuery = lang === "en" ? `${query} official audio` : `${query} hindi song official audio`;
+        const ytResults = await getYtDlpMetadata(ytQuery, targetLimit * 2);
         results = [...results, ...ytResults];
     }
+    
+    // Aggressively remove unofficial tracks 
+    results = filterOfficialOnly(results, query);
 
     const sliced = results.slice(0, targetLimit);
     searchCache.set(cacheKey, sliced);
