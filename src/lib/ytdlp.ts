@@ -1,67 +1,97 @@
-
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execPromise = promisify(exec);
 
+// Hard cap so one yt-dlp call never hangs the server
+const YT_DLP_TIMEOUT_MS = 12_000;
+
 export type YtDlpResult = {
-    title: string;
-    url: string;
-    duration: number;
-    thumbnail: string;
-    uploader: string;
-    id: string;
+  title: string;
+  url: string;
+  duration: number;
+  thumbnail: string;
+  uploader: string;
+  id: string;
 };
 
-export async function getBestAudioUrl(query: string): Promise<YtDlpResult | null> {
-    try {
-        // Search for the best audio matches on YouTube
-        // using --dump-json to get metadata
-        // yt-search:1 gets the first result
-        const command = `yt-dlp "ytsearch1:${query}" --dump-json --format "bestaudio/best" --no-playlist`;
-        const { stdout } = await execPromise(command);
-        const data = JSON.parse(stdout);
-
-        return {
-            title: data.title,
-            url: data.url,
-            duration: data.duration,
-            thumbnail: data.thumbnail,
-            uploader: data.uploader,
-            id: data.id
-        };
-    } catch (error) {
-        console.error('yt-dlp resolution failed:', error);
-        return null;
-    }
+/** Wraps a promise with a ms timeout — resolves to null on timeout */
+function withTimeout<T>(promise: Promise<T>, ms: number, label = 'operation'): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) =>
+      setTimeout(() => { console.warn(`[yt-dlp] ${label} timed out after ${ms}ms`); resolve(null); }, ms)
+    ),
+  ]);
 }
 
-export async function getYtDlpMetadata(query: string, limit: number = 7) {
+/**
+ * Resolves the single best audio URL from YouTube for a given query.
+ * Uses --get-url instead of --dump-json for faster turnaround.
+ */
+export async function getBestAudioUrl(query: string): Promise<YtDlpResult | null> {
+  const work = (async () => {
     try {
-        const command = `yt-dlp "ytsearch${limit}:${query}" --dump-json --format "bestaudio/best" --no-playlist`;
-        const { stdout } = await execPromise(command);
-        
-        // yt-dlp returns multiple json objects separated by newline when searching
-        const results = stdout.trim().split('\n').map(line => {
-            try {
-                const data = JSON.parse(line);
-                return {
-                    id: data.id,
-                    title: data.title,
-                    subtitle: data.uploader,
-                    image: data.thumbnail,
-                    url: data.url,
-                    duration: data.duration,
-                    source: 'youtube'
-                };
-            } catch {
-                return null;
-            }
-        }).filter(Boolean);
-
-        return results;
+      // Fetch only what we need: one match, best audio, no playlist
+      const jsonCmd = `yt-dlp "ytsearch1:${query.replace(/"/g, '')}" --dump-json --format "bestaudio[ext=m4a]/bestaudio/best" --no-playlist --no-warnings --socket-timeout 8`;
+      const { stdout } = await execPromise(jsonCmd, { timeout: YT_DLP_TIMEOUT_MS });
+      const trimmed = stdout.trim();
+      if (!trimmed) return null;
+      const data = JSON.parse(trimmed);
+      return {
+        title: data.title as string,
+        url: data.url as string,
+        duration: data.duration as number,
+        thumbnail: (data.thumbnail || data.thumbnails?.[0]?.url || '') as string,
+        uploader: (data.uploader || data.channel || '') as string,
+        id: data.id as string,
+      };
     } catch (error) {
-        console.error('yt-dlp search failed:', error);
-        return [];
+      console.error('[yt-dlp] getBestAudioUrl failed:', (error as Error).message?.slice(0, 120));
+      return null;
     }
+  })();
+
+  return withTimeout(work, YT_DLP_TIMEOUT_MS, `getBestAudioUrl(${query.slice(0, 40)})`);
+}
+
+/**
+ * Gets metadata for multiple YouTube results in ONE yt-dlp call.
+ * Much faster than calling getBestAudioUrl repeatedly.
+ */
+export async function getYtDlpMetadata(query: string, limit = 7) {
+  const work = (async () => {
+    try {
+      const safeQuery = query.replace(/"/g, '');
+      const command = `yt-dlp "ytsearch${limit}:${safeQuery}" --dump-json --format "bestaudio[ext=m4a]/bestaudio/best" --no-playlist --no-warnings --flat-playlist --socket-timeout 8`;
+      const { stdout } = await execPromise(command, { timeout: YT_DLP_TIMEOUT_MS });
+
+      return stdout
+        .trim()
+        .split('\n')
+        .flatMap((line) => {
+          try {
+            const data = JSON.parse(line);
+            if (!data?.id || !data?.title) return [];
+            return [{
+              id: data.id as string,
+              title: data.title as string,
+              subtitle: (data.uploader || data.channel || '') as string,
+              image: (data.thumbnail || data.thumbnails?.[0]?.url || '') as string,
+              url: data.url as string,
+              duration: data.duration as number,
+              source: 'youtube',
+            }];
+          } catch {
+            return [];
+          }
+        });
+    } catch (error) {
+      console.error('[yt-dlp] getYtDlpMetadata failed:', (error as Error).message?.slice(0, 120));
+      return [];
+    }
+  })();
+
+  const result = await withTimeout(work, YT_DLP_TIMEOUT_MS, `getYtDlpMetadata(${query.slice(0, 40)})`);
+  return result ?? [];
 }

@@ -16,54 +16,35 @@ export type SearchResultItem = {
   url?: string;
 };
 
-const searchCache = new MemoryCache<SearchResultItem[]>({ maxEntries: 200, ttlMs: 2 * 60_000 });
+// Extended TTL: 10 min for search — results don't change that fast
+const searchCache = new MemoryCache<SearchResultItem[]>({ maxEntries: 400, ttlMs: 10 * 60_000 });
 
-function normalizeSource(value: string | null) {
-  const normalized = (value ?? "").trim().toLowerCase();
-  if (!normalized) return "jio";
-  if (normalized === "jio") return "jio";
-  if (normalized === "spotify" || normalized === "all") return "jio";
-  return null;
+function parseLimit(value: string | null): number {
+  const parsed = value ? Number.parseInt(value, 10) : Number.NaN;
+  if (!Number.isFinite(parsed)) return 20;
+  return Math.min(50, Math.max(1, parsed));
 }
 
-function filterOfficialOnly(results: any[], query: string) {
+function isProbablyEnglish(query: string): boolean {
+  return !/[\u0900-\u097F]/.test(query); // no Devanagari → treat as English
+}
+
+const AVOID_WORDS = ["remix", "unplugged", "lofi", "slowed", "reverb", "cover", "8d", "mashup", "instrumental", "karaoke"];
+
+function filterOfficialOnly(results: SearchResultItem[], query: string): SearchResultItem[] {
   const lowerQuery = query.toLowerCase();
-  const avoidWords = ["remix", "unplugged", "lofi", "slowed", "reverb", "cover", "8d", "mashup", "instrumental", "karaoke"];
-  
-  const allowedOverrides = avoidWords.filter(word => lowerQuery.includes(word));
-  
+  const allowedOverrides = AVOID_WORDS.filter(w => lowerQuery.includes(w));
   return results.filter(r => {
-    const textToCheck = `${r.title || ""} ${r.subtitle || r.artists || ""}`.toLowerCase();
-    for (const word of avoidWords) {
-       // If the track matches an avoid word, but the user DID NOT explicitly ask for it
-       if (!allowedOverrides.includes(word) && textToCheck.includes(word)) {
-           return false;
-       }
+    const text = `${r.title || ""} ${r.subtitle || ""}`.toLowerCase();
+    for (const word of AVOID_WORDS) {
+      if (!allowedOverrides.includes(word) && text.includes(word)) return false;
     }
     return true;
   });
 }
 
-function parseLimit(value: string | null) {
-  const parsed = value ? Number.parseInt(value, 10) : Number.NaN;
-  if (!Number.isFinite(parsed)) return 7;
-  return Math.min(50, Math.max(1, parsed));
-}
-
 export function OPTIONS(req: NextRequest) {
   return optionsResponse(req);
-}
-
-function isProbablyEnglish(query: string): boolean {
-  // Simple heuristic: if it contains many common English words or no devanagari-like patterns
-  // For now, if it's alphanumeric, we can check both or just prioritize one.
-  // Many Indian users search Hindi songs in English.
-  // Let's check for Devanagari characters first.
-  const hasDevanagari = /[\u0900-\u097F]/.test(query);
-  if (hasDevanagari) return false;
-  
-  // If it's specifically requested or if it looks like an international artist.
-  return true; // Default to true but we'll use lang param if available
 }
 
 export async function GET(req: NextRequest) {
@@ -78,50 +59,59 @@ export async function GET(req: NextRequest) {
   if (query.length > 120) return errorResponse(req, "Query too long", 400);
 
   const lang = searchParams.get("lang")?.toLowerCase() || (isProbablyEnglish(query) ? "en" : "hi");
-  const limit = parseLimit(searchParams.get("limit") || "20");
-  
-  const cacheKey = `${query.toLowerCase()}|${limit}|${lang}`;
+  const limit = parseLimit(searchParams.get("limit"));
 
+  const cacheKey = `${query.toLowerCase()}|${limit}|${lang}`;
   const cached = searchCache.get(cacheKey);
-  if (cached) return jsonResponse(req, cached, { cacheSeconds: 30 });
+  if (cached) return jsonResponse(req, cached, { cacheSeconds: 60 });
 
   try {
-    let results: any[] = [];
-    
+    let results: SearchResultItem[] = [];
+
     if (lang === "en") {
-      // English -> MusicBrainz
-      const mbResults = await searchMusicBrainz(query, limit);
-      results = mbResults.map((r: any) => ({
-        id: r.id,
-        title: r.title,
-        subtitle: r.artists,
-        image: r.image || "https://img.icons8.com/color/512/music-record.png", // Generic music icon if no cover found
-        source: "musicbrainz",
-        mbid: r.id
-      }));
+      // ── English: MusicBrainz first, yt-dlp enrichment only if needed ───────
+      const [mbResults, ytResults] = await Promise.allSettled([
+        searchMusicBrainz(query, limit),
+        // Only start yt-dlp if we expect MB to be thin — fire in parallel
+        getYtDlpMetadata(`${query} official audio`, Math.max(5, limit - 10)),
+      ]);
+
+      if (mbResults.status === "fulfilled" && mbResults.value.length > 0) {
+        results = mbResults.value.map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          subtitle: r.artists,
+          image: r.image || "https://img.icons8.com/color/512/music-record.png",
+          source: "musicbrainz",
+          mbid: r.id,
+        }));
+      }
+
+      // Append yt-dlp results only if we're short on hits
+      if (results.length < limit && ytResults.status === "fulfilled" && ytResults.value) {
+        const ytIds = new Set(results.map(r => r.id));
+        results = [...results, ...(ytResults.value as SearchResultItem[]).filter(r => !ytIds.has(r.id))];
+      }
     } else {
-      // Hindi -> JioSaavn
-      results = (await searchJioSaavn(query)) as SearchResultItem[];
+      // ── Hindi: JioSaavn is primary, fast and reliable ───────────────────────
+      results = (await searchJioSaavn(query, Math.max(limit, 30))) as SearchResultItem[];
+
+      // Only call yt-dlp if JioSaavn returns very few results
+      if (results.length < 5) {
+        const ytResults = await getYtDlpMetadata(`${query} hindi song official`, Math.max(5, limit));
+        const jioIds = new Set(results.map(r => r.id));
+        results = [...results, ...(ytResults as SearchResultItem[]).filter(r => !jioIds.has(r.id))];
+      }
     }
 
-    // If we have few results or want to enrich with yt-dlp metadata as well
-    // Let's ensure we get at least 20 results if possible
-    const targetLimit = Math.max(limit, 20);
-    if (results.length < targetLimit) {
-        // Differentiate YouTube search by language to avoid "same results" on different tabs
-        const ytQuery = lang === "en" ? `${query} official audio` : `${query} hindi song official audio`;
-        const ytResults = await getYtDlpMetadata(ytQuery, targetLimit * 2);
-        results = [...results, ...ytResults];
-    }
-    
-    // Aggressively remove unofficial tracks 
     results = filterOfficialOnly(results, query);
+    const sliced = results.slice(0, limit);
 
-    const sliced = results.slice(0, targetLimit);
     searchCache.set(cacheKey, sliced);
-    return jsonResponse(req, sliced, { cacheSeconds: 30 });
+    return jsonResponse(req, sliced, { cacheSeconds: 60 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[search] Unhandled:", message);
     return errorResponse(req, message, 500);
   }
 }
